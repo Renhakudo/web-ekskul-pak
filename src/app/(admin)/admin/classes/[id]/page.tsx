@@ -285,7 +285,7 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
           ) : (
              assignments.map((a, idx) => (
                <Card key={a.id} className="group hover:border-pink-300 transition-all">
-                  <CardContent className="p-4 flex items-center justify-between">
+                  <CardContent className="p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                       <div className="h-10 w-10 rounded-full bg-pink-100 flex items-center justify-center text-pink-600 font-bold"><Briefcase className="h-5 w-5"/></div>
                       <div>
@@ -295,7 +295,16 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
                         </p>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    
+                    {/* BUTTON ACTIONS */}
+                    <div className="flex gap-2 w-full md:w-auto">
+                       {/* TOMBOL BARU: PERIKSA / NILAI */}
+                       <Link href={`/admin/classes/${id}/assignments/${a.id}`} className="w-full md:w-auto">
+                         <Button variant="outline" size="sm" className="w-full border-violet-200 text-violet-700 hover:bg-violet-50">
+                           Periksa & Nilai
+                         </Button>
+                       </Link>
+
                        <Button variant="ghost" size="icon" className="text-orange-400 hover:text-orange-600" onClick={()=>openEditAssignment(a)}><Pencil className="h-4 w-4"/></Button>
                        <Button variant="ghost" size="icon" className="text-red-400 hover:text-red-600" onClick={()=>handleDelete('assignments', a.id)}><Trash2 className="h-4 w-4"/></Button>
                     </div>

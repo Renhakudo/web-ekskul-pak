@@ -2,7 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, BookOpen, Trophy, CalendarCheck, LogOut } from 'lucide-react'
+// Tambahkan 'User' di sini
+import { LayoutDashboard, BookOpen, Trophy, CalendarCheck, LogOut, User } from 'lucide-react'
 import { cn } from '@/lib/utils' // Utility bawaan shadcn
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
@@ -13,6 +14,8 @@ const menuItems = [
   { href: '/dashboard/courses', label: 'Materi & Tugas', icon: BookOpen },
   { href: '/dashboard/leaderboard', label: 'Peringkat', icon: Trophy },
   { href: '/dashboard/absensi', label: 'Absensi', icon: CalendarCheck },
+  // Menu Baru: Profil Saya
+  { href: '/dashboard/profile', label: 'Profil Saya', icon: User },
 ]
 
 export function Sidebar() {
