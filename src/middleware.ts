@@ -13,32 +13,48 @@ export async function middleware(request: NextRequest) {
       cookies: {
         getAll() { return request.cookies.getAll() },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           response = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options))
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          )
         },
       },
     }
   )
 
   const { data: { user } } = await supabase.auth.getUser()
+  const pathname = request.nextUrl.pathname
 
-  // 1. Proteksi Login
-  if (!user && (request.nextUrl.pathname.startsWith('/dashboard') || request.nextUrl.pathname.startsWith('/admin'))) {
+  // 1. User sudah login tapi mencoba buka /login → redirect ke tempat yang sesuai
+  if (user && pathname === '/login') {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+    
+    const role = profile?.role
+    if (role === 'admin' || role === 'guru') {
+      return NextResponse.redirect(new URL('/admin', request.url))
+    }
+    return NextResponse.redirect(new URL('/dashboard', request.url))
+  }
+
+  // 2. Proteksi rute: user belum login tapi akses /dashboard atau /admin
+  if (!user && (pathname.startsWith('/dashboard') || pathname.startsWith('/admin'))) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // 2. Proteksi Halaman Admin
-  if (user && request.nextUrl.pathname.startsWith('/admin')) {
+  // 3. Proteksi Halaman Admin: harus login dan punya role yang valid
+  if (user && pathname.startsWith('/admin')) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single()
 
-    // Cek Role Bahasa Indonesia: 'admin' atau 'guru'
     const isAllowed = profile?.role === 'admin' || profile?.role === 'guru'
-    
     if (!isAllowed) {
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }
@@ -48,5 +64,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  // Sertakan /login agar bisa redirect user yang sudah login
+  // Kecualikan auth/callback agar tidak ter-intercept saat OAuth flow
   matcher: ['/dashboard/:path*', '/admin/:path*', '/login'],
 }

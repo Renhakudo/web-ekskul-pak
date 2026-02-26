@@ -18,13 +18,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   const adminMenu = [
-    { href: '/admin', label: 'Dashboard Statistik', icon: LayoutDashboard },
-    { href: '/admin/users', label: 'User & Role', icon: Users },
-    { href: '/admin/classes', label: 'Manajemen Kelas', icon: BookOpen },
-    { href: '/admin/blogs', label: 'Blog & Berita', icon: FileText },
-    { href: '/admin/attendance', label: 'Absensi Pintar', icon: QrCode },
-    { href: '/admin/discussions', label: 'Forum Diskusi', icon: MessageSquare },
-    { href: '/admin/settings', label: 'Pengaturan', icon: Settings },
+    { href: '/admin', label: 'Dashboard Statistik', icon: LayoutDashboard, exact: true },
+    { href: '/admin/users', label: 'User & Role', icon: Users, exact: false },
+    { href: '/admin/classes', label: 'Manajemen Kelas', icon: BookOpen, exact: false },
+    { href: '/admin/blog', label: 'Blog & Berita', icon: FileText, exact: false },
+    { href: '/admin/settings', label: 'Pengaturan', icon: Settings, exact: false },
   ]
 
   return (
@@ -35,20 +33,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <ShieldAlert className="h-5 w-5 text-red-500" />
           <span>Admin Panel</span>
         </div>
-        
+
         <div className="flex-1 py-6 px-4">
           <nav className="space-y-1">
             {adminMenu.map((item) => {
               const Icon = item.icon
-              const isActive = pathname === item.href
+              const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href)
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   className={cn(
                     "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
-                    isActive 
-                      ? "bg-red-600 text-white shadow-md shadow-red-900/20" 
+                    isActive
+                      ? "bg-red-600 text-white shadow-md shadow-red-900/20"
                       : "text-slate-400 hover:bg-slate-800 hover:text-white"
                   )}
                 >
@@ -61,8 +59,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
 
         <div className="p-4 border-t border-slate-800">
-           <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             className="w-full justify-start text-red-400 hover:text-red-300 hover:bg-red-900/10"
             onClick={handleLogout}
           >
