@@ -1,29 +1,30 @@
-# 📚 Master Project Context: Web Profil & LMS Ekskul (Gamifikasi)
+# 📚 Master Project Context: Web Profil & LMS Ekskul (Gamifikasi) v2.0
 
 ## 1. 🎯 Visi & Tujuan
 Membangun sebuah website modern untuk ekstrakurikuler yang berfungsi sebagai:
-1. **Public Website:** Profil ekskul yang menarik, informatif, dan interaktif untuk umum.
+1. **Public Website:** Profil ekskul yang menarik, informatif, dan sarana publikasi (Blog) untuk umum.
 2. **Internal LMS + Gamification:** Sistem pembelajaran digital untuk Siswa dan Guru yang dilengkapi elemen *game* (XP, Leaderboard, Streak) agar proses belajar lebih seru dan interaktif.
 
-## 2. 🚀 Tech Stack Utama
+## 2. 🚀 Tech Stack Utama & Konvensi
 - **Framework:** Next.js 14/15+ (App Router, Server Components, Turbopack)
+- **Konvensi Render:** Menggunakan `export const dynamic = 'force-dynamic'` pada halaman publik yang dinamis (seperti Blog) untuk menghindari *stale cache* dari Next.js.
 - **Styling:** Tailwind CSS
 - **UI Components:** Shadcn UI (Radix UI, Lucide Icons)
 - **Backend as a Service (BaaS):** Supabase
   - **Auth:** Email/Password (Target: OAuth Google)
   - **Database:** PostgreSQL dengan Row Level Security (RLS)
   - **Realtime:** Sinkronisasi data forum diskusi (Polling/WebSockets)
-  - **Storage:** Upload foto profil, dokumen tugas, dan gambar blog (Segera)
+  - **Storage:** Upload foto profil, dokumen tugas, dan gambar blog (Bucket: `blog-images`)
 
 ---
 
 ## 3. 👥 User Roles (Hak Akses)
 Sistem menggunakan kontrol akses berbasis role (RBAC) pada tabel `profiles`:
-1. **`admin` (Administrator):** - Akses penuh ke seluruh sistem. Mengatur saklar global (Register & Absensi).
-   - *Roadmap:* Kelola semua user (ubah role), import/export data, kelola seluruh blog & materi.
-2. **`guru` (Teacher):** - *Core:* Membuat kelas, materi, tugas, menilai (grading), moderasi forum (hapus pesan).
-   - *Roadmap:* Membuat Quiz auto-koreksi, memantau statistik kelas, kelola blog.
-3. **`siswa` (Student):** - *Core:* Mengikuti kelas, baca materi, kumpul tugas, diskusi, isi absensi, dapat XP.
+1. **`admin` (Administrator):** - *Core:* Akses penuh ke seluruh sistem. Mengatur saklar global (Register & Absensi), kelola seluruh blog & materi.
+   - *Roadmap:* Kelola semua user (ubah role), import/export data.
+2. **`guru` (Teacher):** - *Core:* Membuat kelas, materi, tugas, menilai (grading), moderasi forum (hapus pesan), kelola blog.
+   - *Roadmap:* Membuat Quiz auto-koreksi, memantau statistik kelas.
+3. **`siswa` (Student):** - *Core:* Mengikuti kelas, baca materi, kumpul tugas, diskusi, isi absensi, baca blog, dapat XP.
    - *Roadmap:* Share pencapaian (social share), ngerjain Quiz, kumpulin Badge & Streak harian.
 
 ---
@@ -40,6 +41,7 @@ Sistem menggunakan kontrol akses berbasis role (RBAC) pada tabel `profiles`:
 8. **`replies`** -> `id`, `discussion_id`, `user_id`, `content`, `created_at`, `updated_at`.
 9. **`attendances`** -> `id`, `user_id`, `status`, `created_at`, `date_only` (Unique Constraint per user per day).
 10. **`app_settings`** -> `id` (default 1), `is_attendance_open`, `is_registration_open`, `updated_at`.
+11. **`blog_posts`** -> `id`, `title`, `slug`, `content`, `category`, `status` ('draft' | 'published'), `cover_url`, `author_id` (FK to profiles.id), `created_at`, `updated_at`.
 
 *(Catatan untuk AI Agent: Terapkan RLS policy yang ketat untuk setiap operasi CRUD).*
 
@@ -55,6 +57,7 @@ Sistem menggunakan kontrol akses berbasis role (RBAC) pada tabel `profiles`:
 4. **Gamification (Tahap 1):** Sistem poin (XP) yang diakumulasi dari absen harian (+10 XP) dan materi. Konversi Level (`Floor(XP/100) + 1`). Global Leaderboard dengan UI podium juara.
 5. **Sistem Absensi Pintar:** Terhubung dengan "Saklar Admin". Mencegah *double absen* di hari yang sama.
 6. **Admin Global Control:** Halaman `/admin/settings` dengan UI Toggle Switch untuk mematikan/menyalakan fitur "Register" dan "Absensi".
+7. **Blog & Publikasi:** CRUD Artikel oleh Admin/Guru, upload cover ke Supabase Storage, status Draft/Published, auto-generate slug, serta render publik dengan fitur *bypass cache* agar data selalu *fresh*.
 
 ---
 
@@ -66,29 +69,25 @@ AI Agent diharapkan fokus mengembangkan fitur-fitur berikut secara bertahap:
 - **Target UI:** Modern, clean, animasi halus (Framer Motion), responsif.
 - **Komponen:** - Hero Section (Nama ekskul, Tagline, CTA Login).
   - Tentang Ekskul (Visi, Misi, Sejarah).
+  - Preview Blog/Berita (Ambil 3 data terbaru dari `blog_posts`).
   - Program/Kegiatan & Galeri Dokumentasi.
-  - Preview Blog/Berita.
   - Testimoni & Statistik (Anggota, Karya).
   - Footer komprehensif.
 
-### B. Blog & Publikasi
-- **Sistem:** CRUD artikel oleh Admin/Guru.
-- **Fitur:** Rich text editor, upload cover/gambar (Supabase Storage), kategori/tag.
-
-### C. Advanced LMS (Quiz & Media)
+### B. Advanced LMS (Quiz & Media)
 - **Quiz Engine:** Pilihan ganda, auto-koreksi, pembatasan waktu.
 - **Materi:** Dukungan native embed YouTube (saat ini baru text/file dasar).
 
-### D. Advanced Gamification & Social
+### C. Advanced Gamification & Social
 - **Daily Streak:** Sistem hitung *login* berturut-turut ala Duolingo/TikTok.
 - **Badges:** Lencana otomatis jika memenuhi syarat (misal: "First Blood" buat tugas pertama).
 - **Share Generator:** Auto-generate *Image Card* (Bawaan Next.js `ImageResponse` / `@vercel/og`) yang menampilkan Level, XP, dan Avatar siswa untuk di-share ke medsos.
 
-### E. Advanced Presensi & Laporan (Import/Export)
+### D. Advanced Presensi & Laporan (Import/Export)
 - **Metode Presensi:** Upgrade dari klik tombol menjadi Input Kode Unik Harian atau Scan QR Code.
 - **Export/Import:** Fitur *Export* nilai, absensi, dan data siswa ke CSV/Excel. Fitur *Import* data siswa baru massal.
 
-### F. Dashboard Analitik & Historikal
+### E. Dashboard Analitik & Historikal
 - **Grafik:** Chart perkembangan poin/nilai siswa (Recharts / Chart.js).
 - **Admin Stats:** Total user aktif, total materi, persentase kehadiran ekskul.
 
@@ -98,6 +97,7 @@ AI Agent diharapkan fokus mengembangkan fitur-fitur berikut secara bertahap:
 
 **Tersedia (Selesai):**
 - `/login`, `/register` (Public)
+- `/blog`, `/blog/[slug]` (Public Blog)
 - `/dashboard` (Siswa Home)
 - `/dashboard/courses` (List Kelas)
 - `/dashboard/classes/[id]` (Detail Kelas: Tabs Materi, Tugas, Diskusi)
@@ -107,14 +107,12 @@ AI Agent diharapkan fokus mengembangkan fitur-fitur berikut secara bertahap:
 - `/admin`, `/admin/classes` (Admin Home & CRUD Kelas)
 - `/admin/classes/[id]/grading/[assignmentId]` (Panel Penilaian)
 - `/admin/settings` (Global Settings)
+- `/admin/blog`, `/admin/blog/new`, `/admin/blog/[id]/edit` (CRUD Blog)
 
 **Direncakan (Belum Dibuat):**
 - `/` (Landing Page)
-- `/blog` (Public List Artikel)
-- `/blog/[slug]` (Public Detail Artikel)
-- `/admin/blog` (CRUD Artikel)
 - `/admin/users` (User Management)
 - `/dashboard/quizzes` (Engine Ujian)
 
 ---
-*Instruksi untuk AI: Saat generate kode baru, gunakan warna tema Slate (slate-900), Emerald (emerald-600), dan Violet (violet-600). Pastikan komponen UI menggunakan pendekatan Shadcn UI dan class Tailwind CSS.*
+*Instruksi untuk AI: Saat generate kode baru, gunakan warna tema Slate (slate-900), Emerald (emerald-600), dan Violet (violet-600). Pastikan komponen UI menggunakan pendekatan Shadcn UI dan class Tailwind CSS. Selalu pertimbangkan bypass cache (`force-dynamic`) untuk route publik yang terikat database.*

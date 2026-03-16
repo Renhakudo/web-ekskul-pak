@@ -1,3 +1,4 @@
+// /blog/[slug]/page.tsx
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -9,6 +10,9 @@ import type { Metadata } from 'next'
 interface Props {
     params: Promise<{ slug: string }>
 }
+
+// Bypass Cache agar halaman detail selalu update jika ada revisi
+export const dynamic = 'force-dynamic'
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { slug } = await params
@@ -38,16 +42,22 @@ export default async function BlogDetailPage({ params }: Props) {
     const { slug } = await params
     const supabase = await createClient()
 
-    const { data: post } = await supabase
+    const { data: post, error } = await supabase
         .from('blog_posts')
         .select('*, profiles(full_name, avatar_url)')
         .eq('slug', slug)
         .eq('status', 'published')
         .single()
 
-    if (!post) notFound()
+    if (error || !post) {
+        console.error("Post not found or error:", error?.message)
+        notFound()
+    }
 
-    const author = post.profiles as any
+    // Karena relasi table Supabase bisa mengembalikan object atau array, 
+    // kita handle dengan aman di sini:
+    const authorFullName = post.profiles?.full_name || 'Tim EkskulDev'
+    const authorAvatarUrl = post.profiles?.avatar_url || null
 
     return (
         <div className="min-h-screen bg-white">
@@ -95,15 +105,15 @@ export default async function BlogDetailPage({ params }: Props) {
 
                 {/* Meta */}
                 <div className="flex items-center gap-4 mb-8 pb-8 border-b border-slate-100">
-                    {author?.avatar_url ? (
-                        <img src={author.avatar_url} alt={author.full_name} className="w-10 h-10 rounded-full border border-slate-200" />
+                    {authorAvatarUrl ? (
+                        <img src={authorAvatarUrl} alt={authorFullName} className="w-10 h-10 rounded-full border border-slate-200" />
                     ) : (
                         <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center font-bold text-violet-700">
-                            {author?.full_name?.[0]?.toUpperCase() || 'T'}
+                            {authorFullName?.[0]?.toUpperCase() || 'T'}
                         </div>
                     )}
                     <div>
-                        <div className="font-semibold text-slate-800 text-sm">{author?.full_name || 'Tim EkskulDev'}</div>
+                        <div className="font-semibold text-slate-800 text-sm">{authorFullName}</div>
                         <div className="text-xs text-slate-400 flex items-center gap-1">
                             <CalendarDays className="h-3 w-3" />
                             {new Date(post.created_at).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
@@ -141,7 +151,7 @@ export default async function BlogDetailPage({ params }: Props) {
 
             {/* Footer */}
             <footer className="border-t border-slate-100 mt-12 py-8 text-center text-sm text-slate-400">
-                © 2025 EkskulDev LMS ·{' '}
+                © 2026 EkskulDev LMS ·{' '}
                 <Link href="/" className="hover:text-violet-600 transition-colors">Beranda</Link>
                 {' · '}
                 <Link href="/blog" className="hover:text-violet-600 transition-colors">Blog</Link>

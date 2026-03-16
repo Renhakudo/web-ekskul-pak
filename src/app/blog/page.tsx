@@ -1,3 +1,4 @@
+// /blog/page.tsx
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
@@ -10,14 +11,20 @@ export const metadata: Metadata = {
     description: 'Artikel, berita, dan update terbaru dari Ekstrakurikuler PAK.',
 }
 
+export const dynamic = 'force-dynamic'
+
 export default async function BlogListPage() {
     const supabase = await createClient()
 
-    const { data: posts } = await supabase
+    const { data: posts, error } = await supabase
         .from('blog_posts')
         .select('id, title, slug, cover_url, category, created_at, author_id, profiles(full_name)')
         .eq('status', 'published')
         .order('created_at', { ascending: false })
+
+    if (error) {
+        console.error("Error fetching public posts:", error.message)
+    }
 
     const firstPost = posts?.[0]
     const restPosts = posts?.slice(1) || []
@@ -105,6 +112,7 @@ export default async function BlogListPage() {
                                 </h2>
                                 <div className="flex items-center gap-3 text-sm text-slate-500 mb-6">
                                     <span className="font-medium text-slate-700">
+                                        {/* Perbaikan Tipe Data TS */}
                                         {(firstPost.profiles as any)?.full_name || 'Tim EkskulDev'}
                                     </span>
                                     <span>·</span>
@@ -153,6 +161,7 @@ export default async function BlogListPage() {
                                             {post.title}
                                         </h3>
                                         <div className="flex items-center justify-between text-xs text-slate-400 mt-3 pt-3 border-t border-slate-100">
+                                            {/* Perbaikan Tipe Data TS */}
                                             <span className="font-medium">{(post.profiles as any)?.full_name || 'Tim EkskulDev'}</span>
                                             <span className="flex items-center gap-1">
                                                 <CalendarDays className="h-3 w-3" />
@@ -169,7 +178,7 @@ export default async function BlogListPage() {
 
             {/* Footer minimal */}
             <footer className="border-t border-slate-100 mt-24 py-8 text-center text-sm text-slate-400">
-                © 2025 EkskulDev LMS ·{' '}
+                © 2026 EkskulDev LMS ·{' '}
                 <Link href="/" className="hover:text-violet-600 transition-colors">Beranda</Link>
                 {' · '}
                 <Link href="/login" className="hover:text-violet-600 transition-colors">Login</Link>
