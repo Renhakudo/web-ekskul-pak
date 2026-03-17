@@ -7,18 +7,15 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { Plus, BookOpen, ChevronRight, Loader2 } from 'lucide-react'
+import { Plus, BookOpen, ChevronRight, Loader2, PlayCircle, FolderOpen, AlignLeft } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
-// Definisikan tipe data lokal
-// Definisikan tipe data lokal
 interface ClassItem {
   id: string
   title: string
   description: string
-  // Tambahkan baris ini biar error hilang:
-  materials: { count: number }[] 
+  materials: { count: number }[]
 }
 
 export default function ManageClassesPage() {
@@ -29,11 +26,9 @@ export default function ManageClassesPage() {
   const [isOpen, setIsOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // State Form Create Class
   const [title, setTitle] = useState('')
   const [desc, setDesc] = useState('')
 
-  // 1. Fetch Data Kelas
   const fetchClasses = async () => {
     setLoading(true)
     const { data, error } = await supabase
@@ -56,7 +51,6 @@ export default function ManageClassesPage() {
     fetchClasses()
   }, [])
 
-  // 2. Handle Create Class
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
@@ -78,91 +72,111 @@ export default function ManageClassesPage() {
       setIsOpen(false)
       setTitle('')
       setDesc('')
-      fetchClasses() // Refresh list
+      fetchClasses()
     }
     setIsSubmitting(false)
   }
 
   return (
-    <div className="p-8 space-y-8 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Manajemen Kelas</h1>
-          <p className="text-slate-500">Buat dan kelola kelas ekskul di sini.</p>
+    <div className="p-6 md:p-8 space-y-10 max-w-7xl mx-auto min-h-screen font-sans">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-emerald-100 border-4 border-slate-900 shadow-[8px_8px_0px_#0f172a] rounded-[32px] p-8 md:p-10 relative mt-2">
+        <div className="relative z-10">
+          <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight flex items-center gap-4">
+            <div className="bg-emerald-400 p-3 rounded-2xl border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] transform rotate-3">
+              <FolderOpen className="h-10 w-10 text-slate-900" />
+            </div>
+            Direktori Kelas
+          </h1>
+          <p className="text-slate-700 font-bold text-lg mt-3 bg-white inline-block px-4 py-1 border-2 border-slate-900 rounded-xl shadow-sm -rotate-1">
+            Buat kompilasi misi seru untuk para pahlawan amatir ekskulmu.
+          </p>
         </div>
-        
+
         {/* Modal Tambah Kelas */}
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-violet-600 hover:bg-violet-700">
-              <Plus className="mr-2 h-4 w-4" /> Buat Kelas Baru
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Buat Kelas Baru</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleCreate} className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label>Nama Kelas</Label>
-                <Input 
-                  placeholder="Contoh: ReactJS Dasar - Batch 1" 
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Deskripsi Singkat</Label>
-                <Input 
-                  placeholder="Deskripsi singkat tentang kelas ini..." 
-                  value={desc}
-                  onChange={(e) => setDesc(e.target.value)}
-                />
-              </div>
-              <Button type="submit" className="w-full bg-violet-600" disabled={isSubmitting}>
-                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : 'Simpan Kelas'}
+        <div className="relative z-10 shrink-0">
+          <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+              <Button className="h-14 px-6 md:px-8 text-lg font-black bg-emerald-400 hover:bg-emerald-300 text-slate-900 border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a] hover:translate-y-1 hover:shadow-[2px_2px_0px_#0f172a] transition-all rounded-2xl">
+                <Plus className="mr-2 h-6 w-6" /> Rilis Kelas Baru
               </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="border-4 border-slate-900 shadow-[12px_12px_0px_#0f172a] rounded-[32px] sm:max-w-md p-8">
+              <DialogHeader>
+                <DialogTitle className="text-3xl font-black text-slate-900">Rakit Misi Baru</DialogTitle>
+                <CardDescription className="font-bold text-slate-500 mt-2">Bikin para siswa pusing tapi nagih.</CardDescription>
+              </DialogHeader>
+              <form onSubmit={handleCreate} className="space-y-6 mt-4">
+                <div className="space-y-2">
+                  <Label className="font-black text-slate-800 uppercase text-sm">Nama Sandi / Modul</Label>
+                  <Input
+                    placeholder="Contoh: Operasi Penguasaan React..."
+                    className="h-14 font-bold text-lg border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] rounded-2xl focus-visible:ring-0 focus:shadow-[2px_2px_0px_#0f172a] focus:translate-y-1 transition-all"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-black text-slate-800 uppercase text-sm">Intel singkat (Deskripsi)</Label>
+                  <div className="relative">
+                    <AlignLeft className="absolute left-4 top-4 h-6 w-6 text-slate-400" />
+                    <Input
+                      placeholder="Apa inti misinya..."
+                      className="pl-14 h-14 font-medium text-lg border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] rounded-2xl focus-visible:ring-0 focus:shadow-[2px_2px_0px_#0f172a] focus:translate-y-1 transition-all"
+                      value={desc}
+                      onChange={(e) => setDesc(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <Button type="submit" className="w-full h-14 bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-black text-xl border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] hover:shadow-[2px_2px_0px_#0f172a] hover:translate-y-1 transition-all rounded-2xl" disabled={isSubmitting}>
+                  {isSubmitting ? <Loader2 className="h-6 w-6 animate-spin" /> : 'Luncurkan Kelas'}
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* List Kelas */}
       {loading ? (
-        <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-slate-400" /></div>
+        <div className="flex justify-center py-20"><Loader2 className="h-12 w-12 animate-spin text-slate-900" /></div>
       ) : classes.length === 0 ? (
-        <div className="text-center py-20 border-2 border-dashed rounded-xl bg-slate-50">
-          <BookOpen className="mx-auto h-12 w-12 text-slate-300" />
-          <h3 className="mt-4 text-lg font-semibold text-slate-900">Belum ada kelas</h3>
-          <p className="text-slate-500">Mulai dengan membuat kelas pertama Anda.</p>
+        <div className="text-center py-24 border-4 border-dashed border-slate-300 rounded-[32px] bg-slate-50">
+          <div className="w-24 h-24 bg-slate-200 border-2 border-slate-400 rounded-full flex items-center justify-center mx-auto mb-6">
+            <BookOpen className="h-12 w-12 text-slate-400" />
+          </div>
+          <h3 className="text-2xl font-black text-slate-900">Zonanya Masih Kosong</h3>
+          <p className="font-bold text-slate-500 mt-2 text-lg">Ayo rilis kelas pertamamu segera, komandan!</p>
         </div>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {classes.map((item) => (
-            <Card key={item.id} className="hover:shadow-lg transition-all group border-slate-200">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-xl group-hover:text-violet-600 transition-colors">
-                  {item.title}
-                </CardTitle>
-                <CardDescription className="line-clamp-2">
-                  {item.description || 'Tidak ada deskripsi'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between mt-4">
-                  <div className="text-sm text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
-                    {item.materials ? item.materials[0]?.count : 0} Materi
+        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+          {classes.map((item, idx) => {
+            const rotClass = idx % 2 === 0 ? 'hover:rotate-1' : 'hover:-rotate-1'
+            return (
+              <Card key={item.id} className={`group flex flex-col border-4 border-slate-900 shadow-[8px_8px_0px_#0f172a] rounded-[32px] bg-white overflow-hidden hover:-translate-y-2 hover:shadow-[4px_4px_0px_#0f172a] ${rotClass} transition-all`}>
+                <div className="h-6 bg-emerald-400 border-b-4 border-slate-900 w-full" />
+                <CardHeader className="p-6 pb-2">
+                  <CardTitle className="text-2xl font-black text-slate-900 group-hover:text-emerald-700 transition-colors leading-tight line-clamp-2">
+                    {item.title}
+                  </CardTitle>
+                  <CardDescription className="font-bold text-slate-600 line-clamp-2 mt-2 text-base h-12">
+                    {item.description || 'Intel kofidensial. Tidak ada deskripsi tertulis.'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="mt-auto p-6 pt-6 bg-white border-t-2 border-slate-100 flex items-end justify-between">
+                  <div className="text-base font-black text-emerald-800 bg-emerald-200 border-2 border-emerald-300 px-4 py-1.5 rounded-xl flex items-center gap-2">
+                    <PlayCircle className="h-5 w-5" />
+                    {item.materials ? item.materials[0]?.count : 0} Modul
                   </div>
                   <Link href={`/admin/classes/${item.id}`}>
-                    <Button variant="outline" size="sm" className="group-hover:border-violet-500 group-hover:text-violet-600">
-                      Kelola <ChevronRight className="ml-1 h-4 w-4" />
+                    <Button className="h-12 px-5 bg-slate-900 hover:bg-slate-800 text-white font-black border-2 border-slate-900 shadow-[3px_3px_0px_#34d399] rounded-xl group-hover:-translate-y-1 transition-transform">
+                      Kelola Panel <ChevronRight className="ml-2 h-5 w-5" />
                     </Button>
                   </Link>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
       )}
     </div>

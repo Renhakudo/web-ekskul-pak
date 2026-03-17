@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CalendarCheck, Clock, CheckCircle2, AlertCircle, Loader2, Star, Lock, Flame } from 'lucide-react'
+import { awardEligibleBadges } from '@/lib/badge-utils'
+import { updateLearningStreak } from '@/lib/streak-utils'
 
 const getTodayDateString = () => {
   const today = new Date()
@@ -59,7 +61,8 @@ export default function AbsensiPage() {
           .order('created_at', { ascending: false }),
         supabase
           .from('profiles')
-          .select('streak, last_attended_at')
+          // Baca last_activity_date (kolom baru) untuk cek streak lintas event
+          .select('streak, last_activity_date')
           .eq('id', authUser.id)
           .single(),
       ])
@@ -69,7 +72,6 @@ export default function AbsensiPage() {
         setHasAttendedToday(attendRes.data.some(a => a.date_only === todayString))
       }
 
-      // Streak — graceful: jika kolom belum ada, default 0
       if (profileRes.data) {
         setCurrentStreak(profileRes.data.streak || 0)
       }
@@ -86,7 +88,7 @@ export default function AbsensiPage() {
     setIsSubmitting(true)
     setSuccessMessage('')
 
-    // 1. Insert attendance — UNIQUE constraint (user_id, date_only) mencegah double absen di DB level
+    // 1. Catat kehadiran ke tabel attendances
     const { error: attendError } = await supabase
       .from('attendances')
       .insert({ user_id: userId, status: 'hadir', date_only: todayString })
@@ -97,141 +99,135 @@ export default function AbsensiPage() {
       return
     }
 
-    // 2. Hitung streak baru berdasarkan last_attended_at
+    // 2. Hitung & update XP (+10 dari absensi)
     const { data: profile } = await supabase
       .from('profiles')
-      .select('points, streak, last_attended_at')
+      .select('points')
       .eq('id', userId)
       .single()
 
-    const currentPoints = profile?.points || 0
-    const oldStreak = profile?.streak || 0
-    const lastAttendedAt = profile?.last_attended_at
+    await supabase.from('profiles').update({
+      points: (profile?.points || 0) + 10,
+      last_activity: todayString, // update kolom last_activity sebagai riwayat absensi
+    }).eq('id', userId)
 
-    // Streak logic:
-    // - Jika last_attended_at adalah kemarin → streak + 1
-    // - Jika null atau lebih dari kemarin → reset ke 1
-    let newStreak = 1
-    if (lastAttendedAt === yesterdayString) {
-      newStreak = oldStreak + 1
-    }
+    // 3. Update learning streak via helper terpusat
+    //    Helper akan cek last_activity_date dan hitung streak baru
+    const newStreak = await updateLearningStreak(userId, supabase)
 
-    // 3. Update profil: XP + streak + last_attended_at
-    const updatePayload: any = {
-      points: currentPoints + 10,
-      last_attended_at: todayString,
-    }
-
-    // Hanya update streak jika kolom ada (toleransi DB yang belum di-migrate)
-    if ('streak' in (profile || {})) {
-      updatePayload.streak = newStreak
-    }
-
-    await supabase.from('profiles').update(updatePayload).eq('id', userId)
-
-    // 4. Update state lokal
-    setCurrentStreak(newStreak)
-    setSuccessMessage(`+10 XP diterima! 🌟 Streak kamu: ${newStreak} hari berturut-turut 🔥`)
+    const displayStreak = newStreak ?? currentStreak
+    setCurrentStreak(displayStreak)
+    setSuccessMessage(`+10 XP diterima! Streak belajarmu: ${displayStreak} hari!`)
     await fetchAttendances()
+
+    // 4. Cek badge yang layak diterima
+    awardEligibleBadges(userId, supabase).catch(() => { })
+
     setIsSubmitting(false)
   }
 
   if (loading) return (
     <div className="p-8 max-w-4xl mx-auto space-y-6">
-      <Skeleton className="h-40 w-full rounded-2xl" />
-      <Skeleton className="h-64 w-full rounded-2xl" />
+      <Skeleton className="h-40 w-full rounded-[32px] border-4 border-slate-900 shadow-[8px_8px_0px_#0f172a]" />
+      <Skeleton className="h-64 w-full rounded-[32px] border-4 border-slate-900 shadow-[8px_8px_0px_#0f172a]" />
     </div>
   )
 
   if (!userId) return (
     <div className="flex h-screen items-center justify-center">
-      <div className="text-center text-slate-500">Sesi kamu telah habis, silakan login kembali.</div>
+      <div className="text-center font-bold text-slate-500">Akses ditolak. Silakan login kembali.</div>
     </div>
   )
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-8 min-h-screen">
+    <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-10 min-h-screen font-sans">
 
-      <div className="flex flex-col md:flex-row md:items-center gap-4 justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-            <CalendarCheck className="h-8 w-8 text-emerald-500" /> Absensi Ekskul
+      <div className="flex flex-col md:flex-row md:items-center gap-6 justify-between bg-emerald-300 border-4 border-slate-900 shadow-[8px_8px_0px_#0f172a] rounded-[32px] p-8 relative overflow-hidden mt-2">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-400 rounded-full blur-[40px] opacity-60"></div>
+        <div className="relative z-10">
+          <h1 className="text-4xl md:text-5xl font-black text-slate-900 flex items-center gap-4">
+            <div className="bg-white p-3 rounded-2xl border-2 border-slate-900 shadow-[4px_4px_0px_#0f172a] transform -rotate-3">
+              <CalendarCheck className="h-8 w-8 text-emerald-600" />
+            </div>
+            Absensi
           </h1>
-          <p className="text-slate-500 mt-1">
-            Hadir = <span className="font-semibold text-violet-600">+10 XP</span> dan mempertahankan streak harianmu!
+          <p className="text-emerald-900 font-bold mt-4 text-lg">
+            Cek in harian dapat <span className="bg-yellow-300 border-2 border-slate-900 px-2 py-0.5 rounded-lg shadow-sm">+10 XP</span> dan jaga streak kerenmu!
           </p>
         </div>
 
         {/* Streak Badge */}
-        <div className={`flex items-center gap-2 px-5 py-3 rounded-2xl border font-bold text-base self-start md:self-auto ${currentStreak > 0
-            ? 'bg-orange-50 border-orange-200 text-orange-700'
-            : 'bg-slate-100 border-slate-200 text-slate-500'
+        <div className={`relative z-10 flex items-center gap-3 px-6 py-4 rounded-2xl border-4 font-black shadow-[4px_4px_0px_#0f172a] self-start md:self-auto transform rotate-2 ${currentStreak > 0
+          ? 'bg-orange-400 border-slate-900 text-slate-900'
+          : 'bg-slate-100 border-slate-900 text-slate-400 shadow-none rotate-0'
           }`}>
-          <Flame className={`h-5 w-5 ${currentStreak > 0 ? 'text-orange-500 fill-orange-500' : 'text-slate-400'}`} />
-          {currentStreak > 0 ? `${currentStreak} Hari Streak!` : 'Belum ada streak'}
+          <Flame className={`h-6 w-6 ${currentStreak > 0 ? 'text-yellow-200 fill-yellow-300' : 'text-slate-400'}`} />
+          <span className="text-xl">{currentStreak > 0 ? `${currentStreak} Hari Streak!` : 'Belum Mulai'}</span>
         </div>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-6">
+      <div className="grid md:grid-cols-3 gap-8">
 
         {/* KARTU ABSEN */}
-        <Card className={`md:col-span-1 shadow-lg overflow-hidden relative ${isAttendanceOpen ? 'border-emerald-200' : 'border-slate-300 bg-slate-50'}`}>
-          <div className={`absolute top-0 left-0 w-full h-2 ${isAttendanceOpen ? 'bg-gradient-to-r from-emerald-400 to-teal-500' : 'bg-slate-300'}`} />
-          <CardHeader>
-            <CardTitle className="text-lg">Status Hari Ini</CardTitle>
-            <CardDescription>
+        <Card className={`md:col-span-1 shadow-[8px_8px_0px_#0f172a] border-4 border-slate-900 rounded-[32px] overflow-hidden relative ${isAttendanceOpen ? 'bg-white' : 'bg-slate-50'}`}>
+          <div className={`absolute top-0 left-0 w-full h-4 border-b-4 border-slate-900 ${isAttendanceOpen ? 'bg-emerald-400' : 'bg-slate-300'}`} />
+          <CardHeader className="pt-8 text-center pb-2">
+            <CardTitle className="text-xl font-black text-slate-900">Status Hari Ini</CardTitle>
+            <CardDescription className="font-bold text-slate-500">
               {new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col items-center justify-center text-center py-6">
+          <CardContent className="flex flex-col items-center justify-center text-center p-6">
 
             {hasAttendedToday ? (
-              <div className="space-y-4 animate-in zoom-in duration-300">
-                <div className="h-20 w-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <CheckCircle2 className="h-10 w-10" />
+              <div className="space-y-4 animate-in zoom-in duration-300 w-full flex flex-col items-center pt-2">
+                <div className="h-24 w-24 bg-emerald-400 border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] rounded-full flex items-center justify-center transform hover:rotate-6 transition-transform">
+                  <CheckCircle2 className="h-12 w-12 text-slate-900" />
                 </div>
-                <h3 className="font-bold text-xl text-slate-900">Sudah Absen!</h3>
-                <p className="text-sm text-slate-500">Terima kasih sudah hadir hari ini.</p>
+                <h3 className="font-black text-2xl text-slate-900 mt-2">Sudah Check-In!</h3>
+                <p className="text-base font-bold text-slate-500">Mantap, kamu sudah aman hari ini.</p>
                 {currentStreak > 1 && (
-                  <div className="flex items-center gap-1.5 justify-center bg-orange-50 border border-orange-100 rounded-full px-4 py-2">
-                    <Flame className="h-4 w-4 text-orange-500 fill-orange-500" />
-                    <span className="text-sm font-bold text-orange-700">{currentStreak} Hari Berturut-turut!</span>
+                  <div className="flex items-center gap-2 justify-center bg-orange-400 border-2 border-slate-900 rounded-xl px-5 py-2 shadow-[2px_2px_0px_#0f172a] rotate-1">
+                    <Flame className="h-5 w-5 text-yellow-300 fill-yellow-300" />
+                    <span className="text-sm font-black text-slate-900">{currentStreak} Hari Berturut-turut!</span>
                   </div>
                 )}
-                <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 mt-2 px-3 py-1 text-sm font-bold border border-yellow-200">
-                  <Star className="h-4 w-4 mr-1 fill-yellow-500 text-yellow-500" /> +10 XP Didapatkan
+                <Badge className="bg-yellow-300 text-slate-900 px-4 py-2 text-base font-black border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] hover:bg-yellow-400 cursor-default">
+                  <Star className="h-5 w-5 mr-1 fill-slate-900 text-slate-900" /> +10 XP Diamankan
                 </Badge>
               </div>
             ) : !isAttendanceOpen ? (
-              <div className="space-y-4 w-full">
-                <div className="h-20 w-20 bg-slate-200 text-slate-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Lock className="h-10 w-10" />
+              <div className="space-y-4 w-full flex flex-col items-center pt-2">
+                <div className="h-24 w-24 bg-slate-200 border-4 border-slate-900 rounded-full flex items-center justify-center mb-2 shadow-[4px_4px_0px_#0f172a]">
+                  <Lock className="h-12 w-12 text-slate-500" />
                 </div>
-                <h3 className="font-bold text-xl text-slate-900">Absensi Ditutup</h3>
-                <p className="text-sm text-slate-500 mt-1">Sesi absensi belum dibuka. Silakan tunggu instruksi.</p>
+                <h3 className="font-black text-2xl text-slate-900">Portal Ditutup</h3>
+                <p className="text-base font-bold text-slate-500">Tunggu instruksi kak mentor untuk membuka portal check-in.</p>
               </div>
             ) : (
-              <div className="space-y-6 w-full">
-                <div className="h-20 w-20 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Clock className="h-10 w-10" />
+              <div className="space-y-6 w-full flex flex-col items-center pt-2">
+                <div className="h-24 w-24 bg-yellow-300 border-4 border-slate-900 rounded-full flex items-center justify-center mb-2 shadow-[4px_4px_0px_#0f172a] animate-pulse">
+                  <Clock className="h-12 w-12 text-slate-900" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-xl text-slate-900">Belum Absen</h3>
-                  <p className="text-sm text-slate-500 mt-1">
+                  <h3 className="font-black text-2xl text-slate-900">Belum Check-In</h3>
+                  <p className="text-base font-bold text-slate-500 mt-2 leading-relaxed">
                     {currentStreak > 0
-                      ? `Pertahankan streak ${currentStreak} harimu! Absen sekarang.`
-                      : 'Klik tombol di bawah untuk mencatat kehadiranmu.'}
+                      ? `Jangan sampai streak ${currentStreak} harimu hangus! Segera klik jam di bawah.`
+                      : 'Mulai petualanganmu hari ini dengan mencatat kehadiran.'}
                   </p>
                 </div>
                 {successMessage && (
-                  <p className="text-sm font-semibold text-emerald-600 bg-emerald-50 rounded-lg p-2">{successMessage}</p>
+                  <p className="text-sm font-black text-emerald-700 bg-emerald-200 border-2 border-slate-900 rounded-xl p-3 shadow-[2px_2px_0px_#0f172a]">{successMessage}</p>
                 )}
                 <Button
                   onClick={handleCheckIn}
                   disabled={isSubmitting}
-                  className="w-full h-12 text-lg font-bold bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-500/20"
+                  className="w-full h-14 text-xl font-black bg-emerald-400 hover:bg-emerald-300 text-slate-900 border-4 border-slate-900 rounded-2xl shadow-[6px_6px_0px_#0f172a] hover:translate-y-1 hover:shadow-[2px_2px_0px_#0f172a] transition-all"
                 >
-                  {isSubmitting ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : 'Isi Daftar Hadir ✅'}
+                  {isSubmitting ? <Loader2 className="animate-spin h-6 w-6 mr-2" /> : (
+                    <span className="flex items-center gap-2"><CheckCircle2 className="h-6 w-6" /> Hadir!</span>
+                  )}
                 </Button>
               </div>
             )}
@@ -239,42 +235,46 @@ export default function AbsensiPage() {
         </Card>
 
         {/* RIWAYAT ABSENSI */}
-        <Card className="md:col-span-2 shadow-sm border-slate-200">
-          <CardHeader className="border-b bg-slate-50/50">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Clock className="h-5 w-5 text-slate-500" /> Riwayat Kehadiran
-              <Badge variant="secondary" className="ml-auto">{attendances.length}× Hadir</Badge>
+        <Card className="md:col-span-2 shadow-[8px_8px_0px_#0f172a] border-4 border-slate-900 rounded-[32px] overflow-hidden bg-white flex flex-col">
+          <CardHeader className="border-b-4 border-slate-900 bg-slate-50 flex flex-row items-center justify-between p-6">
+            <CardTitle className="text-xl font-black flex items-center gap-3">
+              <Clock className="h-6 w-6 text-violet-600" /> Riwayat Portal
             </CardTitle>
+            <Badge className="bg-violet-300 text-slate-900 font-bold border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] text-base hover:bg-violet-300">
+              {attendances.length}x Hadir
+            </Badge>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-0 flex-1 relative bg-white">
             {attendances.length === 0 ? (
-              <div className="p-12 text-center text-slate-500 flex flex-col items-center">
-                <AlertCircle className="h-10 w-10 text-slate-300 mb-3" />
-                <p>Belum ada riwayat absensi.</p>
+              <div className="p-16 text-center flex flex-col items-center w-full">
+                <div className="w-20 h-20 bg-slate-100 rounded-full border-2 border-slate-300 border-dashed flex items-center justify-center mb-4">
+                  <AlertCircle className="h-10 w-10 text-slate-400" />
+                </div>
+                <p className="font-bold text-slate-500 text-lg">Jejak petualanganmu belum tercatat.</p>
               </div>
             ) : (
-              <div className="divide-y divide-slate-100 max-h-[400px] overflow-y-auto">
+              <div className="divide-y-2 divide-slate-100 max-h-[400px] overflow-y-auto w-full p-2">
                 {attendances.map((record, idx) => (
-                  <div key={record.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                  <div key={record.id} className="p-4 mx-2 my-2 rounded-2xl border-2 border-slate-900 bg-white shadow-sm flex items-center justify-between hover:bg-emerald-50 transition-colors group">
                     <div className="flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                        <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                      <div className="h-12 w-12 rounded-xl bg-emerald-300 border-2 border-slate-900 flex items-center justify-center shrink-0 shadow-[2px_2px_0px_#0f172a] group-hover:rotate-6 transition-transform">
+                        <CheckCircle2 className="h-6 w-6 text-slate-900" />
                       </div>
                       <div>
-                        <p className="font-bold text-slate-900 text-sm">
+                        <p className="font-black text-slate-900 text-lg leading-none mb-1">
                           {new Date(record.created_at).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                         </p>
-                        <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                          <Clock className="h-3 w-3" />
-                          Pukul {new Date(record.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
+                        <p className="text-sm font-bold text-slate-500 flex items-center gap-1.5 pt-1">
+                          <Clock className="h-4 w-4" />
+                          {new Date(record.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                       {idx === 0 && (
-                        <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border border-emerald-200">Terbaru</Badge>
+                        <Badge className="hidden sm:inline-flex bg-yellow-300 text-slate-900 uppercase font-black tracking-wider border-2 border-slate-900">Baru</Badge>
                       )}
-                      <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200">Hadir</Badge>
+                      <Badge className="bg-emerald-400 text-slate-900 border-2 border-slate-900 px-3 py-1 font-black shadow-[2px_2px_0px_#0f172a]">Hadir</Badge>
                     </div>
                   </div>
                 ))}

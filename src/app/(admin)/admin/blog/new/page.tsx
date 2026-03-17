@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Image, Loader2, Upload, Eye, EyeOff } from 'lucide-react'
+import { ArrowLeft, Image, Loader2, Upload, Eye, EyeOff, FileSignature } from 'lucide-react'
 
 // Helper: auto-generate slug dari title
 const generateSlug = (title: string) =>
@@ -40,7 +40,7 @@ export default function NewBlogPage() {
         const file = e.target.files?.[0]
         if (!file) return
         if (file.size > 5 * 1024 * 1024) {
-            setError('Ukuran gambar maksimal 5MB.')
+            setError('Ukuran gambar maksimal 5MB. Jangan maksa server!')
             return
         }
         setCoverFile(file)
@@ -52,7 +52,7 @@ export default function NewBlogPage() {
         setError('')
 
         if (!title.trim() || !content.trim()) {
-            setError('Judul dan konten tidak boleh kosong.')
+            setError('Judul dan konten berita harus diisi. Pantang kirim kertas kosong.')
             return
         }
 
@@ -61,7 +61,6 @@ export default function NewBlogPage() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) { setError('Sesi habis, silakan login ulang.'); setLoading(false); return }
 
-        // Upload cover image ke Supabase Storage (bucket: blog-images)
         let coverUrl: string | null = null
         if (coverFile) {
             const fileExt = coverFile.name.split('.').pop()
@@ -72,8 +71,7 @@ export default function NewBlogPage() {
                 .upload(filePath, coverFile, { upsert: true })
 
             if (uploadError) {
-                // Jika bucket belum ada, tetap lanjutkan tanpa cover
-                console.warn('Cover upload gagal (bucket mungkin belum dibuat):', uploadError.message)
+                console.warn('Cover upload gagal:', uploadError.message)
             } else {
                 const { data: urlData } = supabase.storage.from('blog-images').getPublicUrl(filePath)
                 coverUrl = urlData.publicUrl
@@ -93,7 +91,7 @@ export default function NewBlogPage() {
         })
 
         if (insertError) {
-            setError('Gagal menyimpan artikel: ' + insertError.message)
+            setError('Gagal menerbitkan artikel: ' + insertError.message)
             setLoading(false)
             return
         }
@@ -103,167 +101,171 @@ export default function NewBlogPage() {
     }
 
     return (
-        <div className="p-6 md:p-8 max-w-4xl mx-auto">
+        <div className="p-6 md:p-8 max-w-5xl mx-auto font-sans min-h-screen">
 
             {/* Header */}
-            <div className="flex items-center gap-4 mb-8">
-                <Link href="/admin/blog">
-                    <Button variant="ghost" size="icon"><ArrowLeft className="h-5 w-5" /></Button>
-                </Link>
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900">Tulis Artikel Baru</h1>
-                    <p className="text-sm text-slate-500">Buat artikel atau berita baru untuk ekskul.</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 bg-pink-300 border-4 border-slate-900 shadow-[8px_8px_0px_#0f172a] rounded-[32px] p-6 md:p-8 relative overflow-hidden mb-8">
+                <div className="flex items-center gap-4 relative z-10 w-full sm:w-auto">
+                    <Link href="/admin/blog" className="shrink-0">
+                        <Button size="icon" className="h-12 w-12 bg-white text-slate-900 border-4 border-slate-900 shadow-[2px_2px_0px_#0f172a] hover:bg-slate-200 rounded-2xl">
+                            <ArrowLeft className="h-6 w-6" />
+                        </Button>
+                    </Link>
+                    <div>
+                        <h1 className="text-3xl font-black text-slate-900 flex items-center gap-3">
+                            Tulis Artikel Baru
+                        </h1>
+                        <p className="text-slate-800 font-bold">Ketik berita ekskul terhangat hari ini.</p>
+                    </div>
                 </div>
-                <div className="ml-auto flex items-center gap-2">
+
+                <div className="relative z-10 flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
                     <Button
                         type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="gap-2"
+                        className="h-12 border-4 border-slate-900 shadow-[2px_2px_0px_#0f172a] bg-yellow-300 hover:bg-yellow-400 text-slate-900 font-black rounded-xl"
                         onClick={() => setPreview(!preview)}
                     >
-                        {preview ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        {preview ? 'Edit' : 'Preview'}
+                        {preview ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+                        {preview ? 'Mode Edit' : 'Pralihat'}
                     </Button>
-                    <Badge className={status === 'published'
-                        ? 'bg-emerald-100 text-emerald-700 border-0'
-                        : 'bg-yellow-100 text-yellow-700 border-0'
-                    }>
-                        {status === 'published' ? 'Published' : 'Draft'}
+                    <Badge className={`text-xs px-3 py-1 font-black uppercase tracking-widest border-2 border-slate-900 shadow-sm ${status === 'published'
+                        ? 'bg-emerald-400 text-slate-900'
+                        : 'bg-slate-200 text-slate-500'
+                        }`}>
+                        {status === 'published' ? 'Live' : 'Draft'}
                     </Badge>
                 </div>
             </div>
 
             {error && (
-                <div className="mb-6 rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+                <div className="mb-6 rounded-2xl bg-red-200 border-4 border-slate-900 p-4 text-slate-900 font-black flex items-center shadow-[4px_4px_0px_#0f172a] transform rotate-1">
                     {error}
                 </div>
             )}
 
             {preview ? (
                 /* PREVIEW MODE */
-                <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
-                    <h2 className="text-3xl md:text-4xl font-black text-slate-900 mb-4">{title || 'Judul Artikel'}</h2>
-                    {category && <Badge variant="outline" className="mb-4 text-violet-600 border-violet-200">{category}</Badge>}
+                <div className="bg-white rounded-[32px] border-4 border-slate-900 p-8 shadow-[8px_8px_0px_#0f172a]">
+                    <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 leading-tight">{title || 'Judul Artikel Kosong'}</h2>
+                    {category && <Badge className="mb-6 bg-violet-200 text-violet-800 border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] font-black uppercase text-xs px-3 py-1">{category}</Badge>}
                     {coverPreview && (
-                        <div className="w-full aspect-video rounded-xl overflow-hidden mb-6 bg-slate-100">
-                            <img src={coverPreview} alt="cover" className="w-full h-full object-cover" />
+                        <div className="w-full aspect-video rounded-3xl overflow-hidden mb-8 border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a]">
+                            <img src={coverPreview} alt="cover" className="w-full h-full object-cover grayscale-[20%] hover:grayscale-0 transition-all" />
                         </div>
                     )}
-                    <div className="prose prose-slate max-w-none text-slate-700 whitespace-pre-wrap leading-relaxed">
-                        {content || 'Konten artikel akan muncul di sini...'}
+                    <div className="prose prose-slate max-w-none text-slate-800 font-medium whitespace-pre-wrap leading-relaxed text-lg">
+                        {content || 'Konten belum ditulis. Silakan kembali ke mode Edit.'}
                     </div>
                 </div>
             ) : (
                 /* EDIT MODE */
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="grid md:grid-cols-3 gap-6">
+                    <div className="grid md:grid-cols-3 gap-8">
 
                         {/* Main Content Area */}
-                        <div className="md:col-span-2 space-y-4">
-                            <div>
-                                <Label htmlFor="title" className="text-sm font-semibold">Judul Artikel *</Label>
+                        <div className="md:col-span-2 space-y-6">
+                            <div className="bg-white p-6 rounded-[32px] border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a]">
+                                <Label htmlFor="title" className="text-lg font-black text-slate-900 uppercase flex items-center gap-2 mb-3">
+                                    <FileSignature className="h-5 w-5 text-pink-500" /> Judul Kabar Utama
+                                </Label>
                                 <Input
                                     id="title"
-                                    placeholder="Masukkan judul yang menarik..."
+                                    placeholder="Siapa yang menang lomba hari ini?"
                                     value={title}
                                     onChange={e => setTitle(e.target.value)}
                                     required
-                                    className="mt-1.5 h-12 text-lg font-medium"
+                                    className="h-16 text-xl font-bold border-4 border-slate-900 rounded-2xl shadow-sm focus:shadow-[4px_4px_0px_#0f172a] transition-all"
                                 />
                             </div>
 
-                            <div>
-                                <Label htmlFor="content" className="text-sm font-semibold">Konten Artikel *</Label>
-                                <p className="text-xs text-slate-400 mb-1.5">Tulis konten artikel dengan format teks biasa. Gunakan Enter untuk paragraf baru.</p>
+                            <div className="bg-white p-6 rounded-[32px] border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a]">
+                                <Label htmlFor="content" className="text-lg font-black text-slate-900 uppercase flex items-center gap-2 mb-1">
+                                    Isi Naskah
+                                </Label>
+                                <p className="text-sm font-bold text-slate-500 mb-4 bg-slate-100 inline-block px-3 py-1 rounded-lg border-2 border-slate-200">Gunakan Enter untuk memisahkan paragraf.</p>
                                 <Textarea
                                     id="content"
-                                    placeholder="Mulai menulis artikel di sini...&#10;&#10;Tekan Enter untuk paragraf baru."
+                                    placeholder="Pada suatu hari di ruang ekskul tercinta kita..."
                                     value={content}
                                     onChange={e => setContent(e.target.value)}
                                     required
-                                    className="min-h-[400px] text-base leading-relaxed font-mono resize-y"
+                                    className="min-h-[400px] text-lg font-medium leading-relaxed resize-y border-4 border-slate-900 rounded-2xl shadow-inner focus:shadow-[4px_4px_0px_#0f172a] transition-all p-4"
                                 />
                             </div>
                         </div>
 
                         {/* Sidebar Settings */}
-                        <div className="space-y-4">
+                        <div className="space-y-6">
 
                             {/* Publish Settings */}
-                            <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-4">
-                                <h3 className="font-bold text-slate-800 text-sm">Publikasi</h3>
+                            <div className="bg-amber-100 rounded-[32px] border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a] p-6 space-y-5">
+                                <h3 className="font-black text-slate-900 text-xl uppercase border-b-4 border-slate-900 pb-2">Konfigurasi</h3>
 
-                                <div>
-                                    <Label className="text-xs font-semibold text-slate-600">Status</Label>
+                                <div className="space-y-2">
+                                    <Label className="font-black text-slate-800">Status Penayangan</Label>
                                     <Select value={status} onValueChange={(v: any) => setStatus(v)}>
-                                        <SelectTrigger className="mt-1.5">
+                                        <SelectTrigger className="h-12 border-4 border-slate-900 font-bold bg-white">
                                             <SelectValue />
                                         </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="draft">📝 Draft (Tersembunyi)</SelectItem>
-                                            <SelectItem value="published">🌐 Published (Publik)</SelectItem>
+                                        <SelectContent className="border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a]">
+                                            <SelectItem value="draft" className="font-bold">📝 Ditunda (Draft)</SelectItem>
+                                            <SelectItem value="published" className="font-bold">🌐 Tayang Langsung</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
 
-                                <div>
-                                    <Label htmlFor="category" className="text-xs font-semibold text-slate-600">Kategori</Label>
+                                <div className="space-y-2">
+                                    <Label htmlFor="category" className="font-black text-slate-800">Label Kategori</Label>
                                     <Input
                                         id="category"
-                                        placeholder="misal: Tutorial, Berita, Tips..."
+                                        placeholder="Pencapaian, Tutorial..."
                                         value={category}
                                         onChange={e => setCategory(e.target.value)}
-                                        className="mt-1.5 h-9 text-sm"
+                                        className="h-12 border-4 border-slate-900 font-bold bg-white"
                                     />
                                 </div>
                             </div>
 
                             {/* Cover Image */}
-                            <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-3">
-                                <h3 className="font-bold text-slate-800 text-sm">Cover Image</h3>
-                                <p className="text-xs text-slate-400">Format JPG/PNG/WebP, maks 5MB. Rasio 16:9 direkomendasikan.</p>
+                            <div className="bg-emerald-100 rounded-[32px] border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a] p-6 space-y-4">
+                                <h3 className="font-black text-slate-900 text-xl uppercase border-b-4 border-slate-900 pb-2">Cover Visual</h3>
 
                                 {coverPreview ? (
-                                    <div className="space-y-2">
-                                        <div className="aspect-video w-full rounded-lg overflow-hidden bg-slate-200">
+                                    <div className="space-y-3">
+                                        <div className="aspect-video w-full rounded-2xl overflow-hidden border-4 border-slate-900 shadow-sm">
                                             <img src={coverPreview} alt="cover preview" className="w-full h-full object-cover" />
                                         </div>
                                         <Button
                                             type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            className="w-full text-red-500 hover:text-red-600 text-xs"
+                                            className="w-full h-10 border-4 border-slate-900 font-black text-slate-900 bg-red-400 hover:bg-red-500 shadow-[2px_2px_0px_#0f172a]"
                                             onClick={() => { setCoverFile(null); setCoverPreview(null) }}
                                         >
-                                            Hapus Gambar
+                                            Buang Gambar
                                         </Button>
                                     </div>
                                 ) : (
-                                    <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-lg p-6 cursor-pointer hover:border-violet-400 hover:bg-violet-50/50 transition-colors">
-                                        <Image className="h-8 w-8 text-slate-400 mb-2" />
-                                        <span className="text-xs text-slate-500 text-center">Klik untuk upload cover</span>
+                                    <label className="flex flex-col items-center justify-center border-4 border-dashed border-slate-900 bg-white rounded-2xl p-6 cursor-pointer hover:-translate-y-1 hover:shadow-[4px_4px_0px_#0f172a] transition-all">
+                                        <Image className="h-10 w-10 text-slate-400 mb-2" />
+                                        <span className="font-bold text-slate-600">Klik Pilih Cover</span>
+                                        <span className="text-xs font-bold text-slate-400 mt-1 max-w-[150px] text-center">Rasio 16:9 disarankan</span>
                                         <input type="file" className="hidden" accept="image/*" onChange={handleCoverChange} />
                                     </label>
                                 )}
                             </div>
 
                             {/* Submit Buttons */}
-                            <div className="space-y-2">
+                            <div className="space-y-3">
                                 <Button
                                     type="submit"
                                     disabled={loading}
-                                    className="w-full bg-violet-600 hover:bg-violet-700 font-semibold"
+                                    className="w-full h-16 bg-pink-500 hover:bg-pink-400 text-slate-900 font-black text-xl border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a] hover:translate-y-1 hover:shadow-[2px_2px_0px_#0f172a] transition-all rounded-2xl"
                                 >
                                     {loading ? (
-                                        <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Menyimpan...</>
+                                        <><Loader2 className="h-6 w-6 animate-spin mr-2" /> Mengetik...</>
                                     ) : (
-                                        <><Upload className="h-4 w-4 mr-2" /> {status === 'published' ? 'Publish Artikel' : 'Simpan Draft'}</>
+                                        <><Upload className="h-5 w-5 mr-3" /> {status === 'published' ? 'Terbitkan Ke Publik' : 'Simpan Diam-diam'}</>
                                     )}
                                 </Button>
-                                <Link href="/admin/blog">
-                                    <Button type="button" variant="ghost" className="w-full text-slate-500">Batal</Button>
-                                </Link>
                             </div>
                         </div>
                     </div>

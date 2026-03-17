@@ -58,6 +58,9 @@ Sistem menggunakan kontrol akses berbasis role (RBAC) pada tabel `profiles`:
 5. **Sistem Absensi Pintar:** Terhubung dengan "Saklar Admin". Mencegah *double absen* di hari yang sama.
 6. **Admin Global Control:** Halaman `/admin/settings` dengan UI Toggle Switch untuk mematikan/menyalakan fitur "Register" dan "Absensi".
 7. **Blog & Publikasi:** CRUD Artikel oleh Admin/Guru, upload cover ke Supabase Storage, status Draft/Published, auto-generate slug, serta render publik dengan fitur *bypass cache* agar data selalu *fresh*.
+8. **Landing Page Ekskul (Redesign):** Halaman publik premium, *dark/glassmorphism theme*, fokus pada profil komunitas ekskul, showcase program, preview blog, dan pengenalan fitur LMS pendukung.
+9. **Sistem Badges (Gamifikasi Tahap 2):** Pemberian otomatis lencana/badge (misal: "Rajin Hadir", "Kolektor XP") berdasarkan *event* absensi atau penugasan, ditampilkan di halaman Profil Siswa.
+10. **Dashboard Analitik (Admin Tahap 2):** Grafik visual (Bar Chart & Line Chart) menggunakan `recharts` untuk memantau distribusi XP siswa dan rekap kehadiran harian/mingguan.
 
 ---
 
@@ -66,36 +69,32 @@ Sistem menggunakan kontrol akses berbasis role (RBAC) pada tabel `profiles`:
 AI Agent diharapkan fokus mengembangkan fitur-fitur berikut secara bertahap:
 
 ### A. Halaman Depan (Public Website / Landing Page)
-- **Target UI:** Modern, clean, animasi halus (Framer Motion), responsif.
-- **Komponen:** - Hero Section (Nama ekskul, Tagline, CTA Login).
-  - Tentang Ekskul (Visi, Misi, Sejarah).
-  - Preview Blog/Berita (Ambil 3 data terbaru dari `blog_posts`).
-  - Program/Kegiatan & Galeri Dokumentasi.
-  - Testimoni & Statistik (Anggota, Karya).
-  - Footer komprehensif.
+- **Status:** ✅ Selesai (v2.0 Redesign)
+- **Review UI/UX Tambahan:** Penyempurnaan animasi lanjutan (Framer Motion) jika dibutuhkan ke depannya.
 
 ### B. Advanced LMS (Quiz & Media)
-- **Quiz Engine:** Pilihan ganda, auto-koreksi, pembatasan waktu.
+- **Quiz Engine:** Pilihan ganda, auto-koreksi, pembatasan waktu. (Masih WIP)
 - **Materi:** Dukungan native embed YouTube (saat ini baru text/file dasar).
 
 ### C. Advanced Gamification & Social
-- **Daily Streak:** Sistem hitung *login* berturut-turut ala Duolingo/TikTok.
-- **Badges:** Lencana otomatis jika memenuhi syarat (misal: "First Blood" buat tugas pertama).
-- **Share Generator:** Auto-generate *Image Card* (Bawaan Next.js `ImageResponse` / `@vercel/og`) yang menampilkan Level, XP, dan Avatar siswa untuk di-share ke medsos.
+- **Daily Streak:** ✅ Selesai. Sistem hitung *login* berturut-turut di halaman absensi.
+- **Badges:** ✅ Selesai. Pemberian *"First Blood"*, *"Master Streak"*, *"Legenda XP"*, dll. Koleksi badge tampil di UI profil.
+- **Share Generator:** Auto-generate *Image Card* (Bawaan Next.js `ImageResponse` / `@vercel/og`) yang menampilkan Level, XP, dan Avatar siswa untuk di-share ke medsos. (Belum dibuat)
 
 ### D. Advanced Presensi & Laporan (Import/Export)
 - **Metode Presensi:** Upgrade dari klik tombol menjadi Input Kode Unik Harian atau Scan QR Code.
 - **Export/Import:** Fitur *Export* nilai, absensi, dan data siswa ke CSV/Excel. Fitur *Import* data siswa baru massal.
 
 ### E. Dashboard Analitik & Historikal
-- **Grafik:** Chart perkembangan poin/nilai siswa (Recharts / Chart.js).
-- **Admin Stats:** Total user aktif, total materi, persentase kehadiran ekskul.
+- **Grafik Admin:** ✅ Selesai. Chart perkembangan poin siswa & kehadiran harian (Recharts).
+- **Admin Stats:** ✅ Selesai. Total user aktif, total materi, persentase kehadiran ekskul.
 
 ---
 
 ## 7. 🗺️ Struktur Routing Next.js
 
 **Tersedia (Selesai):**
+- `/` (Landing Page Redesign)
 - `/login`, `/register` (Public)
 - `/blog`, `/blog/[slug]` (Public Blog)
 - `/dashboard` (Siswa Home)
@@ -107,11 +106,10 @@ AI Agent diharapkan fokus mengembangkan fitur-fitur berikut secara bertahap:
 - `/admin`, `/admin/classes` (Admin Home & CRUD Kelas)
 - `/admin/classes/[id]/grading/[assignmentId]` (Panel Penilaian)
 - `/admin/settings` (Global Settings)
+- `/admin/users` (User Management)
 - `/admin/blog`, `/admin/blog/new`, `/admin/blog/[id]/edit` (CRUD Blog)
 
 **Direncakan (Belum Dibuat):**
-- `/` (Landing Page)
-- `/admin/users` (User Management)
 - `/dashboard/quizzes` (Engine Ujian)
 
 ---

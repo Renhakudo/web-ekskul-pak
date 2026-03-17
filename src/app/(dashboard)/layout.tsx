@@ -1,4 +1,4 @@
-import { Sidebar } from "@/components/Sidebar"
+import { TopNavDashboard } from "@/components/TopNavDashboard"
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 
@@ -7,7 +7,6 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  // Cek sesi user di server (extra security)
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -16,14 +15,9 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-slate-50">
-      {/* Sidebar Desktop (Hidden di HP) */}
-      <div className="hidden md:block fixed inset-y-0 z-50">
-         <Sidebar />
-      </div>
-
-      {/* Konten Utama */}
-      <main className="md:pl-[250px] w-full">
+    <div className="flex flex-col min-h-screen w-full bg-[#FDFBF7] font-sans">
+      <TopNavDashboard />
+      <main className="flex-1 w-full mt-6">
         {children}
       </main>
     </div>

@@ -39,7 +39,6 @@ export default function QuizQuestionsPage({
     const [quiz, setQuiz] = useState<Quiz | null>(null)
     const [questions, setQuestions] = useState<QuizQuestion[]>([])
 
-    // Form state: soal baru yang sedang dibuat
     const [newQuestion, setNewQuestion] = useState('')
     const [newOptions, setNewOptions] = useState([
         { text: '', is_correct: true },
@@ -66,7 +65,6 @@ export default function QuizQuestionsPage({
     }
 
     const handleCorrectChange = (idx: number) => {
-        // Hanya satu jawaban benar (radio behavior)
         setNewOptions(prev => prev.map((o, i) => ({ ...o, is_correct: i === idx })))
     }
 
@@ -74,8 +72,8 @@ export default function QuizQuestionsPage({
         e.preventDefault()
         if (!newQuestion.trim()) return
         const filledOptions = newOptions.filter(o => o.text.trim())
-        if (filledOptions.length < 2) { alert('Minimal 2 pilihan jawaban.'); return }
-        if (!filledOptions.some(o => o.is_correct)) { alert('Pilih satu jawaban yang benar.'); return }
+        if (filledOptions.length < 2) { alert('Minimal 2 pilihan yang sah.'); return }
+        if (!filledOptions.some(o => o.is_correct)) { alert('Mesti ada sebuah kebenaran di antara kepalsuan.'); return }
 
         setSaving(true)
         const { error } = await supabase.from('quiz_questions').insert({
@@ -99,7 +97,7 @@ export default function QuizQuestionsPage({
     }
 
     const handleDeleteQuestion = async (qId: string) => {
-        if (!confirm('Hapus soal ini?')) return
+        if (!confirm('Musnahkan teka-teki ini?')) return
         await supabase.from('quiz_questions').delete().eq('id', qId)
         fetchData()
     }
@@ -107,148 +105,171 @@ export default function QuizQuestionsPage({
     const optionLabels = ['A', 'B', 'C', 'D']
 
     if (loading) return (
-        <div className="p-8 max-w-3xl mx-auto space-y-4">
-            <Skeleton className="h-8 w-48" />
-            <Skeleton className="h-48 w-full" />
-            <Skeleton className="h-48 w-full" />
+        <div className="p-8 max-w-4xl mx-auto space-y-6 mt-10">
+            <Skeleton className="h-24 w-full rounded-2xl bg-emerald-100 border-4 border-slate-900" />
+            <Skeleton className="h-[400px] w-full rounded-[32px] bg-slate-200 border-4 border-slate-900" />
         </div>
     )
 
     return (
-        <div className="p-6 md:p-8 max-w-3xl mx-auto space-y-8">
+        <div className="p-6 md:p-8 max-w-4xl mx-auto space-y-10 min-h-screen font-sans">
 
             {/* Header */}
-            <div className="flex items-center gap-4">
-                <Link href={`/admin/classes/${classId}`}>
-                    <Button variant="ghost" size="icon"><ArrowLeft className="h-5 w-5" /></Button>
-                </Link>
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900">{quiz?.title}</h1>
-                    <div className="flex items-center gap-3 mt-1">
-                        <Badge variant="outline" className="text-xs text-slate-500">
-                            {questions.length} soal
-                        </Badge>
-                        <Badge variant="outline" className="text-xs text-amber-600 border-amber-200">
-                            +{quiz?.xp_reward} XP
-                        </Badge>
-                        <Badge variant="outline" className="text-xs text-slate-500">
-                            {Math.floor((quiz?.time_limit_seconds || 0) / 60)} menit
-                        </Badge>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 bg-emerald-300 border-4 border-slate-900 shadow-[8px_8px_0px_#0f172a] rounded-[32px] p-6 md:p-8 relative overflow-hidden">
+                <div className="flex items-center gap-5 relative z-10 w-full">
+                    <Link href={`/admin/classes/${classId}`} className="shrink-0">
+                        <Button size="icon" className="h-12 w-12 bg-white text-slate-900 border-4 border-slate-900 shadow-[2px_2px_0px_#0f172a] hover:bg-slate-200 rounded-2xl transform rotate-3 hover:rotate-0 transition-transform">
+                            <ArrowLeft className="h-6 w-6" />
+                        </Button>
+                    </Link>
+                    <div className="min-w-0 flex-1">
+                        <h1 className="text-3xl md:text-4xl font-black text-slate-900 flex items-center gap-3 truncate">
+                            {quiz?.title}
+                        </h1>
+                        <div className="flex flex-wrap items-center gap-3 mt-3">
+                            <Badge className="bg-slate-100 text-slate-900 font-black border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] px-3 py-1 uppercase text-xs">
+                                {questions.length} JEBAKAN
+                            </Badge>
+                            <Badge className="bg-yellow-300 text-slate-900 font-black border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] px-3 py-1 uppercase text-xs">
+                                +{quiz?.xp_reward} XP
+                            </Badge>
+                            <Badge className="bg-slate-900 text-white font-black border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] px-3 py-1 uppercase text-xs">
+                                {Math.floor((quiz?.time_limit_seconds || 0) / 60)} MENIT NAFAS
+                            </Badge>
+                        </div>
                     </div>
                 </div>
             </div>
 
             {/* EXISTING QUESTIONS */}
             {questions.length > 0 && (
-                <div className="space-y-4">
-                    <h2 className="text-base font-bold text-slate-700">Daftar Soal ({questions.length})</h2>
-                    {questions.map((q, idx) => (
-                        <Card key={q.id} className="border-slate-200 shadow-sm">
-                            <CardContent className="p-5">
-                                <div className="flex justify-between items-start gap-4 mb-4">
-                                    <div className="flex items-start gap-3">
-                                        <div className="w-8 h-8 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center font-bold text-sm shrink-0">
-                                            {idx + 1}
+                <div className="space-y-6">
+                    <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
+                        <div className="bg-emerald-400 p-2 rounded-xl border-4 border-slate-900 shadow-sm transform -rotate-2">
+                            <HelpCircle className="h-6 w-6 text-slate-900" />
+                        </div>
+                        Papan Interogasi ({questions.length})
+                    </h2>
+
+                    <div className="grid gap-6">
+                        {questions.map((q, idx) => (
+                            <Card key={q.id} className="border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a] rounded-[24px] overflow-hidden bg-white">
+                                <CardContent className="p-0">
+                                    <div className="bg-slate-100 border-b-4 border-slate-900 p-5 flex justify-between items-start gap-4">
+                                        <div className="flex items-start gap-4 flex-1">
+                                            <div className="w-10 h-10 bg-slate-900 text-emerald-400 rounded-xl flex items-center justify-center font-black text-lg border-2 border-emerald-400 shadow-[2px_2px_0px_#34d399] shrink-0 transform -rotate-3">
+                                                {idx + 1}
+                                            </div>
+                                            <p className="font-black text-xl text-slate-900 leading-snug mt-1">{q.question}</p>
                                         </div>
-                                        <p className="font-semibold text-slate-900 leading-snug">{q.question}</p>
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="text-red-400 hover:text-red-600 shrink-0"
-                                        onClick={() => handleDeleteQuestion(q.id)}
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {q.options.map((opt, oIdx) => (
-                                        <div
-                                            key={oIdx}
-                                            className={`flex items-center gap-2 p-2.5 rounded-lg text-sm border ${opt.is_correct
-                                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700 font-semibold'
-                                                    : 'bg-slate-50 border-slate-200 text-slate-600'
-                                                }`}
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-10 w-10 text-slate-600 bg-red-200 hover:bg-red-400 border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] hover:text-white rounded-xl shrink-0 hover:-translate-y-1 transition-all"
+                                            onClick={() => handleDeleteQuestion(q.id)}
                                         >
-                                            <span className={`w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-bold ${opt.is_correct ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'
-                                                }`}>
-                                                {optionLabels[oIdx]}
-                                            </span>
-                                            {opt.is_correct && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />}
-                                            {opt.text}
-                                        </div>
-                                    ))}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))}
+                                            <Trash2 className="h-5 w-5" />
+                                        </Button>
+                                    </div>
+                                    <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white">
+                                        {q.options.map((opt, oIdx) => (
+                                            <div
+                                                key={oIdx}
+                                                className={`flex items-start gap-3 p-4 rounded-xl border-4 transition-all ${opt.is_correct
+                                                    ? 'bg-emerald-100 border-emerald-400 shadow-[4px_4px_0px_#34d399]'
+                                                    : 'bg-slate-50 border-slate-200 text-slate-500'
+                                                    }`}
+                                            >
+                                                <span className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-black shrink-0 border-2 ${opt.is_correct ? 'bg-emerald-400 text-slate-900 border-slate-900 shadow-sm' : 'bg-slate-200 text-slate-400 border-transparent'
+                                                    }`}>
+                                                    {optionLabels[oIdx]}
+                                                </span>
+                                                <div className={`mt-1 font-bold ${opt.is_correct ? 'text-slate-900' : 'text-slate-600'}`}>
+                                                    {opt.text}
+                                                </div>
+                                                {opt.is_correct && <CheckCircle2 className="h-6 w-6 text-emerald-600 ml-auto shrink-0 mt-0.5" />}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
                 </div>
             )}
 
             {questions.length === 0 && (
-                <div className="text-center py-8 border border-dashed border-slate-300 rounded-2xl bg-slate-50">
-                    <HelpCircle className="h-12 w-12 text-slate-300 mx-auto mb-3" />
-                    <p className="text-slate-500">Belum ada soal. Tambah soal pertama di bawah!</p>
+                <div className="text-center py-16 border-4 border-dashed border-slate-300 rounded-[32px] bg-slate-50">
+                    <HelpCircle className="h-16 w-16 text-slate-300 mx-auto mb-4 transform rotate-12" />
+                    <p className="font-black text-2xl text-slate-400 uppercase">Kekosongan Total</p>
+                    <p className="font-bold text-slate-500 mt-2">Mulai merakit pertanyaan maut di form berikut.</p>
                 </div>
             )}
 
             {/* ADD QUESTION FORM */}
-            <Card className="shadow-sm border-slate-200">
-                <CardContent className="p-6">
-                    <h2 className="text-base font-bold text-slate-800 mb-5 flex items-center gap-2">
-                        <Plus className="h-5 w-5 text-emerald-600" /> Tambah Soal Baru
-                    </h2>
-                    <form onSubmit={handleAddQuestion} className="space-y-5">
+            <Card className="border-4 border-slate-900 shadow-[8px_8px_0px_#0f172a] rounded-[32px] overflow-hidden bg-white mt-8">
+                <CardContent className="p-0">
+                    <div className="bg-yellow-300 border-b-4 border-slate-900 p-6">
+                        <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3 uppercase">
+                            <Plus className="h-8 w-8 text-slate-900 bg-white p-1 rounded-lg border-2 border-slate-900 shadow-sm" /> Rancang Pertanyaan Baru
+                        </h2>
+                    </div>
+                    <form onSubmit={handleAddQuestion} className="p-6 md:p-8 space-y-8">
 
-                        <div>
-                            <Label className="text-sm font-semibold">Pertanyaan *</Label>
+                        <div className="space-y-3">
+                            <Label className="text-lg font-black text-slate-900">Deskripsi Pertanyaan *</Label>
                             <Input
                                 value={newQuestion}
                                 onChange={e => setNewQuestion(e.target.value)}
-                                placeholder="Tulis pertanyaan di sini..."
+                                placeholder="Apa inti dari tata surya kita?..."
                                 required
-                                className="mt-1.5 h-11"
+                                className="h-14 border-4 border-slate-900 rounded-xl font-bold text-lg shadow-sm focus:shadow-[4px_4px_0px_#0f172a] transition-all"
                             />
                         </div>
 
-                        <div className="space-y-3">
-                            <Label className="text-sm font-semibold">Pilihan Jawaban</Label>
-                            <p className="text-xs text-slate-400">Aktifkan toggle di sebelah kanan untuk menandai jawaban yang benar.</p>
-                            {newOptions.map((opt, idx) => (
-                                <div key={idx} className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-colors ${opt.is_correct ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'
-                                    }`}>
-                                    <span className={`w-7 h-7 flex items-center justify-center rounded-full text-xs font-bold shrink-0 ${opt.is_correct ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'
+                        <div className="space-y-4">
+                            <div>
+                                <Label className="text-lg font-black text-slate-900">Opsi Jawaban</Label>
+                                <p className="text-sm font-bold text-slate-500 mt-1">Aktifkan tuas hijau di satu opsi untuk menetapkan mana yang BENAR.</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {newOptions.map((opt, idx) => (
+                                    <div key={idx} className={`flex flex-col gap-3 p-4 rounded-xl border-4 transition-colors ${opt.is_correct ? 'border-emerald-400 bg-emerald-50 shadow-[4px_4px_0px_#34d399]' : 'border-slate-300 bg-slate-50 hover:bg-slate-100 focus-within:border-slate-400'
                                         }`}>
-                                        {optionLabels[idx]}
-                                    </span>
-                                    <Input
-                                        value={opt.text}
-                                        onChange={e => handleOptionChange(idx, e.target.value)}
-                                        placeholder={`Pilihan ${optionLabels[idx]}`}
-                                        className="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 p-0 h-8"
-                                    />
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        {opt.is_correct && (
-                                            <span className="text-xs text-emerald-600 font-bold">Benar</span>
-                                        )}
-                                        <Switch
-                                            checked={opt.is_correct}
-                                            onCheckedChange={() => handleCorrectChange(idx)}
-                                            className="data-[state=checked]:bg-emerald-600"
+                                        <div className="flex items-center justify-between border-b-2 border-slate-200 pb-3">
+                                            <span className={`px-3 py-1 rounded-md text-sm font-black tracking-widest uppercase border-2 ${opt.is_correct ? 'bg-emerald-400 text-slate-900 border-slate-900 shadow-[2px_2px_0px_#0f172a]' : 'bg-slate-200 text-slate-500 border-transparent'
+                                                }`}>
+                                                Pilihan {optionLabels[idx]}
+                                            </span>
+                                            <div className="flex items-center gap-2 bg-white px-2 py-1 rounded-lg border-2 border-slate-200">
+                                                <span className={`text-xs font-black uppercase ${opt.is_correct ? 'text-emerald-600' : 'text-slate-400'}`}>{opt.is_correct ? 'BENAR' : 'SALAH'}</span>
+                                                <Switch
+                                                    checked={opt.is_correct}
+                                                    onCheckedChange={() => handleCorrectChange(idx)}
+                                                    className={`data-[state=checked]:bg-emerald-500 ${!opt.is_correct && 'bg-slate-300'}`}
+                                                />
+                                            </div>
+                                        </div>
+                                        <Input
+                                            value={opt.text}
+                                            onChange={e => handleOptionChange(idx, e.target.value)}
+                                            placeholder={`Ketik isi opsi ${optionLabels[idx]}...`}
+                                            className="border-0 bg-transparent shadow-none focus-visible:ring-0 px-0 rounded-none h-10 font-bold text-slate-900 text-base"
                                         />
                                     </div>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
 
                         <Button
                             type="submit"
                             disabled={saving}
-                            className="w-full bg-emerald-600 hover:bg-emerald-700 font-semibold h-11"
+                            className="w-full h-16 bg-slate-900 hover:bg-slate-800 text-emerald-400 font-black text-xl border-4 border-transparent hover:border-slate-900 shadow-[6px_6px_0px_#34d399] rounded-2xl transition-all hover:-translate-y-1 uppercase tracking-widest"
                         >
                             {saving
-                                ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Menyimpan...</>
-                                : <><Plus className="h-4 w-4 mr-2" /> Tambahkan Soal</>
+                                ? <><Loader2 className="h-6 w-6 animate-spin mr-3" /> Menyuntikkan Data...</>
+                                : <><Plus className="h-6 w-6 mr-3" /> Rekam Pertanyaan</>
                             }
                         </Button>
                     </form>
