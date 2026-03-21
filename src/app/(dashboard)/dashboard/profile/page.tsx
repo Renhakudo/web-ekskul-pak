@@ -22,8 +22,11 @@ import {
   Medal,
   Award,
   Share2,
-  Flame
+  Flame,
+  Dice5,
+  KeyRound
 } from 'lucide-react'
+import { toast } from 'sonner'
 
 export default function ProfilePage() {
   const supabase = createClient()
@@ -43,6 +46,9 @@ export default function ProfilePage() {
   const [fullName, setFullName] = useState('')
   const [username, setUsername] = useState('')
   const [bio, setBio] = useState('')
+  const [avatarUrl, setAvatarUrl] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmNewPassword, setConfirmNewPassword] = useState('')
   const [badges, setBadges] = useState<any[]>([])
 
   useEffect(() => {
@@ -68,6 +74,7 @@ export default function ProfilePage() {
         setFullName(profileData.full_name || '')
         setUsername(profileData.username || '')
         setBio(profileData.bio || '')
+        setAvatarUrl(profileData.avatar_url || authUser.user_metadata?.avatar_url || '')
 
         try {
           const classesPromise = supabase
@@ -106,6 +113,12 @@ export default function ProfilePage() {
     initData()
   }, [])
 
+  const handleGenerateAvatar = () => {
+    const randomSeed = Math.random().toString(36).substring(7)
+    const newAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${randomSeed}&backgroundColor=ffdfbf,c0aede,b6e3f4`
+    setAvatarUrl(newAvatar)
+  }
+
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
@@ -113,11 +126,36 @@ export default function ProfilePage() {
 
     if (!user) return
 
+    // Update password if fields are filled
+    if (newPassword) {
+      if (newPassword !== confirmNewPassword) {
+        toast.error('Wah, kata sandi baru dan konfirmasinya tidak cocok!', { position: 'top-center' })
+        setSaving(false)
+        return
+      }
+      if (newPassword.length < 6) {
+        toast.error('Kata sandi harus minimal 6 karakter ya!', { position: 'top-center' })
+        setSaving(false)
+        return
+      }
+      const { error: pwdError } = await supabase.auth.updateUser({ password: newPassword })
+      if (pwdError) {
+        toast.error('Gagal mengganti sandi: ' + pwdError.message)
+        setSaving(false)
+        return
+      } else {
+        toast.success('Pintu brankas baru telah terkunci rapat! (Sandi diganti)')
+        setNewPassword('')
+        setConfirmNewPassword('')
+      }
+    }
+
     const payload = {
       id: user.id,
       full_name: fullName,
       username: username,
       bio: bio,
+      avatar_url: avatarUrl,
       updated_at: new Date().toISOString(),
     }
 
@@ -128,9 +166,13 @@ export default function ProfilePage() {
       .single()
 
     if (error) {
-      setSaveMessage({ text: 'Gagal! ' + error.message, type: 'error' })
+      setSaveMessage({ text: 'Gagal merakit identitas! ' + error.message, type: 'error' })
+      toast.error('Gagal memperbarui profil.')
     } else {
-      setSaveMessage({ text: 'Identitas sukses diperbarui!', type: 'success' })
+      setSaveMessage({ text: 'Keren! Identitas dan avatarmu sudah diperbarui.', type: 'success' })
+      toast.success('Profil sukses diperbarui!', {
+        icon: '🚀'
+      })
       setTimeout(() => window.location.reload(), 1500)
     }
     setSaving(false)
@@ -195,12 +237,22 @@ export default function ProfilePage() {
               <div className="absolute inset-0 bg-pattern-stripes opacity-20"></div>
             </div>
             <CardContent className="pt-0 relative flex flex-col items-center text-center -mt-14 pb-8">
-              <Avatar className="h-28 w-28 border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] bg-white text-slate-900">
-                <AvatarImage src={profile?.avatar_url || user?.user_metadata?.avatar_url} />
-                <AvatarFallback className="text-4xl font-black bg-yellow-300">
-                  {fullName?.[0] || 'U'}
-                </AvatarFallback>
-              </Avatar>
+              <div className="relative group">
+                <Avatar className="h-28 w-28 border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] bg-white text-slate-900 transition-transform group-hover:scale-105">
+                  <AvatarImage src={avatarUrl || profile?.avatar_url || user?.user_metadata?.avatar_url} />
+                  <AvatarFallback className="text-4xl font-black bg-yellow-300">
+                    {fullName?.[0] || 'U'}
+                  </AvatarFallback>
+                </Avatar>
+                <button
+                  type="button"
+                  onClick={handleGenerateAvatar}
+                  className="absolute bottom-0 right-0 bg-orange-400 p-2 rounded-xl border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] hover:bg-orange-300 hover:scale-110 active:translate-y-1 active:shadow-none animate-bounce transition-all cursor-pointer"
+                  title="Ganti Avatar Robot Acak"
+                >
+                  <Dice5 className="h-5 w-5 text-slate-900" />
+                </button>
+              </div>
 
               <div className="mt-4">
                 <h2 className="text-2xl font-black text-slate-900">{fullName || "Pendatang Baru"}</h2>
@@ -379,12 +431,41 @@ export default function ProfilePage() {
                 <div className="space-y-3">
                   <Label className="text-sm font-black text-slate-800 uppercase">Quotes / Bio</Label>
                   <textarea
-                    className="flex min-h-[160px] w-full rounded-3xl border-4 border-slate-900 bg-white p-5 text-lg font-bold shadow-[4px_4px_0px_#0f172a] placeholder:text-slate-400 focus-visible:outline-none focus:shadow-none focus:translate-y-1 transition-all resize-none"
+                    className="flex min-h-[120px] w-full rounded-3xl border-4 border-slate-900 bg-white p-5 text-lg font-bold shadow-[4px_4px_0px_#0f172a] placeholder:text-slate-400 focus-visible:outline-none focus:shadow-none focus:translate-y-1 transition-all resize-none"
                     placeholder="Satu baris kode hari ini, satu karya nyata esok hari..."
                     value={bio}
                     onChange={(e) => setBio(e.target.value)}
                   />
                   <p className="text-sm font-bold text-slate-500 text-right">{bio.length}/150 Huruf</p>
+                </div>
+
+                <div className="pt-4 border-t-2 border-slate-100 border-dashed">
+                  <h4 className="text-lg font-black text-slate-900 flex items-center gap-2 mb-4">
+                    <KeyRound className="h-5 w-5 text-red-500" /> Ganti Kata Sandi
+                  </h4>
+                  <div className="grid md:grid-cols-2 gap-8">
+                    <div className="space-y-3">
+                      <Label className="text-sm font-black text-slate-800 uppercase">Sandi Baru</Label>
+                      <Input
+                        type="password"
+                        placeholder="••••••••"
+                        className="h-14 bg-slate-50 border-4 border-slate-900 shadow-sm rounded-2xl font-bold text-lg text-slate-900 focus-visible:ring-0 focus:bg-white focus:translate-y-1 transition-all tracking-widest placeholder:tracking-normal"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                      />
+                      <p className="text-xs font-bold text-slate-400">Kosongkan jika tidak ingin merubah sandi.</p>
+                    </div>
+                    <div className="space-y-3">
+                      <Label className="text-sm font-black text-slate-800 uppercase">Ketik Ulang Sandi Baru</Label>
+                      <Input
+                        type="password"
+                        placeholder="••••••••"
+                        className="h-14 bg-slate-50 border-4 border-slate-900 shadow-sm rounded-2xl font-bold text-lg text-slate-900 focus-visible:ring-0 focus:bg-white focus:translate-y-1 transition-all tracking-widest placeholder:tracking-normal"
+                        value={confirmNewPassword}
+                        onChange={(e) => setConfirmNewPassword(e.target.value)}
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="pt-8 flex justify-end">
