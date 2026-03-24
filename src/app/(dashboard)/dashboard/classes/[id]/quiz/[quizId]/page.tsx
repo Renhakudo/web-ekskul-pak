@@ -28,6 +28,8 @@ interface Quiz {
     title: string
     xp_reward: number
     time_limit_seconds: number
+    kkm?: number
+    max_attempts?: number
     class_id: string
 }
 
@@ -50,6 +52,7 @@ export default function QuizAttemptPage({
     const [phase, setPhase] = useState<'loading' | 'intro' | 'playing' | 'result'>('loading')
     const [result, setResult] = useState<{ score: number; correct: number; total: number } | null>(null)
     const [alreadyAttempted, setAlreadyAttempted] = useState(false)
+    const [attemptsCount, setAttemptsCount] = useState(0)
     const [userId, setUserId] = useState<string | null>(null)
     const timerRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -59,18 +62,28 @@ export default function QuizAttemptPage({
 
         setUserId(user.id)
 
-        const [quizRes, questionsRes, attemptRes] = await Promise.all([
+        const [quizRes, questionsRes, attemptsRes] = await Promise.all([
             supabase.from('quizzes').select('*').eq('id', quizId).single(),
-            supabase.from('quiz_questions').select('*').eq('quiz_id', quizId).order('order_index'),
-            supabase.from('quiz_attempts').select('score').eq('quiz_id', quizId).eq('user_id', user.id).single(),
+            supabase.from('quiz_questions').select('*').eq('quiz_id', quizId).order('created_at'),
+            supabase.from('quiz_attempts').select('score').eq('quiz_id', quizId).eq('user_id', user.id).order('score', { ascending: false }),
         ])
 
-        if (quizRes.data) { setQuiz(quizRes.data); setTimeLeft(quizRes.data.time_limit_seconds) }
+        if (quizRes.data) { setQuiz(quizRes.data); setTimeLeft(quizRes.data.time_limit_seconds || 600) }
         if (questionsRes.data) setQuestions(questionsRes.data)
-        if (attemptRes.data) { setAlreadyAttempted(true); setResult({ score: attemptRes.data.score, correct: 0, total: questionsRes.data?.length || 0 }) }
+
+        let reachedMax = false
+        if (attemptsRes.data) {
+            setAttemptsCount(attemptsRes.data.length)
+            const limit = quizRes.data?.max_attempts ?? 1
+            if (limit > 0 && attemptsRes.data.length >= limit) {
+                reachedMax = true
+                setAlreadyAttempted(true)
+                setResult({ score: attemptsRes.data[0].score, correct: 0, total: questionsRes.data?.length || 0 })
+            }
+        }
 
         setLoading(false)
-        setPhase(attemptRes.data ? 'result' : 'intro')
+        setPhase(reachedMax ? 'result' : 'intro')
     }, [quizId])
 
     useEffect(() => { fetchData() }, [fetchData])
@@ -124,7 +137,7 @@ export default function QuizAttemptPage({
             completed_at: new Date().toISOString(),
         })
 
-        if (xpEarned > 0) {
+        if (xpEarned > 0 && attemptsCount === 0) {
             const { data: profile } = await supabase.from('profiles').select('points').eq('id', userId).single()
             await supabase.from('profiles').update({ points: (profile?.points || 0) + xpEarned }).eq('id', userId)
             await supabase.from('points_logs').insert({
@@ -141,7 +154,8 @@ export default function QuizAttemptPage({
         setPhase('result')
         setSubmitting(false)
 
-        if (score >= 60) {
+        const kkm = quiz.kkm || 70
+        if (score >= kkm) {
             confetti({ particleCount: 200, spread: 100, origin: { y: 0.5 }, colors: ['#f472b6', '#34d399', '#fbbf24', '#f87171', '#8b5cf6'] })
         }
     }
@@ -189,11 +203,17 @@ export default function QuizAttemptPage({
                         </div>
                     </div>
 
-                    <div className="bg-red-100 border-4 border-slate-900 rounded-2xl p-4 md:p-6 text-base font-bold text-slate-900 flex items-start gap-4 shadow-[4px_4px_0px_#0f172a]">
-                        <AlertTriangle className="h-8 w-8 text-red-600 shrink-0 mt-0.5" />
+                    <div className="bg-blue-100 border-4 border-slate-900 rounded-2xl p-4 md:p-6 text-base font-bold text-slate-900 flex items-start gap-4 shadow-[4px_4px_0px_#0f172a]">
+                        <AlertTriangle className="h-8 w-8 text-blue-600 shrink-0 mt-0.5" />
                         <div>
-                            <p className="text-xl font-black uppercase mb-1 underline decoration-red-400 decoration-4">Peringatan Keras</p>
-                            Ujian ini hanya dapat dijalankan <span className="bg-red-300 px-1 border-2 border-slate-900 rounded mx-1">SATU KALI SAJA</span>. Jangan pernah menoleh ke belakang saat waktu sudah berjalan!
+                            <p className="text-xl font-black uppercase mb-1 underline decoration-blue-400 decoration-4">Sistem Aturan Ujian</p>
+                            Nilai Lulus Minimal: <span className="bg-blue-300 px-2 py-0.5 border-2 border-slate-900 rounded mx-1">{quiz.kkm || 70}</span><br />
+                            Batas Kesempatan: {
+                                (quiz.max_attempts || 1) === 0 ? <span className="text-emerald-600 ml-1">Tak Terbatas (Unlimited)</span> : 
+                                <span className="text-red-500 ml-1">Maksimal {quiz.max_attempts || 1} Kali</span>
+                            }<br />
+                            Kamu sudah mencoba: <span className="font-black text-xl">{attemptsCount}</span> kali.<br />
+                            <span className="text-sm text-slate-500 bg-white/60 px-2 py-1 border-2 border-slate-300 rounded inline-block mt-2">CATATAN: Hadiah XP hanya dicairkan pada penyelesaian pertama.</span>
                         </div>
                     </div>
 
@@ -218,7 +238,7 @@ export default function QuizAttemptPage({
 
     // --- RESULT SCREEN ---
     if (phase === 'result' && result) {
-        const passed = result.score >= 60
+        const passed = result.score >= (quiz.kkm || 70)
         return (
             <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]">
                 <Card className="max-w-xl w-full shadow-[12px_12px_0px_#0f172a] border-4 border-slate-900 rounded-[32px] overflow-hidden bg-white">
@@ -230,9 +250,9 @@ export default function QuizAttemptPage({
                             ? <CheckCircle2 className="h-24 w-24 mx-auto mb-4 drop-shadow-md" />
                             : <XCircle className="h-24 w-24 mx-auto mb-4 drop-shadow-md" />
                         }
-                        <h1 className="text-6xl md:text-8xl font-black mb-2 tracking-tighter drop-shadow-sm">{result.score}%</h1>
+                        <h1 className="text-5xl md:text-7xl font-black mb-2 tracking-tighter drop-shadow-sm">{result.score} / 100</h1>
                         <p className="font-bold text-lg md:text-xl bg-white/40 inline-block px-4 py-1.5 border-2 border-slate-900 rounded-xl mt-2">
-                            {passed ? 'Misi Berhasil dengan Gemilang! 🚀' : 'Misi Gagal Total — Tetap Nekat! ☠️'}
+                            {passed ? 'Lulus KKM dengan Gemilang! 🚀' : 'Gagal Mencapai Target KKM — Jangan Nyerah! ☠️'}
                         </p>
                     </div>
                     <CardContent className="p-8 md:p-10 space-y-8">
@@ -254,8 +274,8 @@ export default function QuizAttemptPage({
                         )}
                         {alreadyAttempted && (
                             <div className="bg-amber-100 border-4 border-slate-900 rounded-2xl p-6 text-center shadow-[4px_4px_0px_#0f172a]">
-                                <h3 className="font-black text-slate-900 text-xl uppercase mb-2">Peringatan Arsip Sejarah</h3>
-                                <p className="font-bold text-slate-600">Skor ini adalah pencapaianmu di masa lalu.<br />Ujian tak bisa diulang demi keadilan sistem.</p>
+                                <h3 className="font-black text-slate-900 text-xl uppercase mb-2">Batas Kesempatan Habis</h3>
+                                <p className="font-bold text-slate-600">Terima kasih atas perjuangan abadimu.<br />Sistem mencatat skor terbaikmu demi integritas nilai.</p>
                             </div>
                         )}
                         <Link href={`/dashboard/classes/${classId}`} className="block pt-4 border-t-4 border-slate-900">

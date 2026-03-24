@@ -12,12 +12,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft, Plus, FileText, Video, Trash2, Loader2, Briefcase, Calendar, Pencil, HelpCircle, Clock, Save, X, Trophy } from 'lucide-react'
+import { ArrowLeft, Plus, FileText, Video, Trash2, Loader2, Briefcase, Calendar, Pencil, HelpCircle, Clock, Save, X, Trophy, Fingerprint } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import RichTextEditor from '@/components/RichTextEditor'
 import { toast } from 'sonner'
 
-interface Material { id: string; title: string; type: 'video' | 'text' | 'quiz' | 'file'; content?: string; youtube_url?: string; xp_reward: number; }
+interface Material { id: string; title: string; module_name?: string; type: 'video' | 'text' | 'quiz' | 'file'; content?: string; youtube_url?: string; file_url?: string; xp_reward: number; }
 interface Assignment { id: string; title: string; description: string; due_date: string; }
 
 export default function ClassAdminPage({ params }: { params: Promise<{ id: string }> }) {
@@ -28,11 +28,13 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
   const [materials, setMaterials] = useState<Material[]>([])
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [quizzes, setQuizzes] = useState<any[]>([])
+  const [classSessions, setClassSessions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   const [isMatOpen, setIsMatOpen] = useState(false)
   const [isAssOpen, setIsAssOpen] = useState(false)
   const [isQuizOpen, setIsQuizOpen] = useState(false)
+  const [isSessionOpen, setIsSessionOpen] = useState(false)
 
   const [qzTitle, setQzTitle] = useState('')
   const [qzTimeLimit, setQzTimeLimit] = useState(600)
@@ -43,12 +45,16 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [mTitle, setMTitle] = useState('')
+  const [mModuleName, setMModuleName] = useState('')
   const [mType, setMType] = useState('text')
   const [mContent, setMContent] = useState('')
 
   const [aTitle, setATitle] = useState('')
   const [aDesc, setADesc] = useState('')
   const [aDueDate, setADueDate] = useState('')
+
+  const [sessionDate, setSessionDate] = useState(new Date().toISOString().slice(0, 10))
+  const [sessionExpiry, setSessionExpiry] = useState('')
 
   const [deleteTarget, setDeleteTarget] = useState<{table: string, id: string} | null>(null)
 
@@ -70,6 +76,9 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
       .order('created_at')
     if (qzData) setQuizzes(qzData)
 
+    const { data: sData } = await supabase.from('class_sessions').select('*').eq('class_id', id).order('session_date', { ascending: false })
+    if (sData) setClassSessions(sData)
+
     setLoading(false)
   }
 
@@ -77,8 +86,10 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
 
   const handleAddMaterial = async (e: React.FormEvent) => {
     e.preventDefault(); setIsSubmitting(true)
-    const payload: any = { class_id: id, title: mTitle, type: mType, xp_reward: 50 }
-    if (mType === 'video') payload.youtube_url = mContent; else payload.content = mContent;
+    const payload: any = { class_id: id, title: mTitle, module_name: mModuleName || null, type: mType, xp_reward: 50 }
+    if (mType === 'video') payload.youtube_url = mContent; 
+    else if (mType === 'file') payload.file_url = mContent;
+    else payload.content = mContent;
 
     const { error } = await supabase.from('materials').insert(payload)
     if (!error) { 
@@ -107,15 +118,17 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
   const openEditMaterial = (m: Material) => {
     setEditingMaterial(m)
     setMTitle(m.title)
+    setMModuleName(m.module_name || '')
     setMType(m.type)
-    setMContent(m.type === 'video' ? m.youtube_url || '' : m.content || '')
+    setMContent(m.type === 'video' ? m.youtube_url || '' : m.type === 'file' ? m.file_url || '' : m.content || '')
   }
 
   const handleUpdateMaterial = async (e: React.FormEvent) => {
     e.preventDefault(); setIsSubmitting(true)
-    const payload: any = { title: mTitle, type: mType }
-    if (mType === 'video') { payload.youtube_url = mContent; payload.content = null }
-    else { payload.content = mContent; payload.youtube_url = null }
+    const payload: any = { title: mTitle, module_name: mModuleName || null, type: mType }
+    if (mType === 'video') { payload.youtube_url = mContent; payload.content = null; payload.file_url = null }
+    else if (mType === 'file') { payload.file_url = mContent; payload.content = null; payload.youtube_url = null }
+    else { payload.content = mContent; payload.youtube_url = null; payload.file_url = null }
 
     const { error } = await supabase.from('materials').update(payload).eq('id', editingMaterial?.id)
     if (!error) { 
@@ -181,8 +194,32 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
     setIsSubmitting(false)
   }
 
+  const handleAddSession = async (e: React.FormEvent) => {
+    e.preventDefault(); setIsSubmitting(true)
+    const uniqueCode = Math.random().toString(36).substring(2, 8).toUpperCase()
+    const expiresAt = sessionExpiry ? new Date(sessionExpiry).toISOString() : new Date(sessionDate + 'T23:59:59Z').toISOString()
+    
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    const { error } = await supabase.from('class_sessions').insert({
+      class_id: id, 
+      session_date: sessionDate, 
+      unique_code: uniqueCode, 
+      expires_at: expiresAt,
+      created_by: user?.id
+    })
+    
+    if (!error) { 
+        toast.success(`Sesi berhasil dibuat! Kode: ${uniqueCode}`)
+        setIsSessionOpen(false); setSessionExpiry(''); fetchData() 
+    } else {
+        toast.error('Gagal membuat sesi: ' + error.message)
+    }
+    setIsSubmitting(false)
+  }
+
   const resetForms = () => {
-    setMTitle(''); setMType('text'); setMContent('');
+    setMTitle(''); setMModuleName(''); setMType('text'); setMContent('');
     setATitle(''); setADesc(''); setADueDate('');
   }
 
@@ -192,7 +229,7 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
     <div className="p-6 md:p-8 space-y-8 max-w-5xl mx-auto min-h-screen font-sans">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 bg-slate-100 border-4 border-slate-900 shadow-[8px_8px_0px_#0f172a] p-6 md:p-8 rounded-[32px] relative mt-2">
         <div className="flex items-center gap-5 relative z-10 w-full">
-          <Link href="/admin/classes">
+          <Link href="/guru/classes">
             <Button size="icon" className="h-12 w-12 bg-white text-slate-900 border-4 border-slate-900 shadow-[2px_2px_0px_#0f172a] hover:bg-slate-200 shrink-0 rounded-2xl">
               <ArrowLeft className="h-6 w-6" />
             </Button>
@@ -205,10 +242,11 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
       </div>
 
       <Tabs defaultValue="materials" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 gap-2 bg-slate-200/60 p-2 rounded-2xl border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] mb-8 min-h-16">
-          <TabsTrigger value="materials" className="font-black text-sm sm:text-base data-[state=active]:bg-violet-400 data-[state=active]:text-slate-900 data-[state=active]:border-2 data-[state=active]:border-slate-900 data-[state=active]:shadow-[2px_2px_0px_#0f172a] rounded-xl transition-all h-full min-h-12 border-2 border-transparent uppercase whitespace-nowrap">Materi Pokok</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 gap-2 bg-slate-200/60 p-2 rounded-2xl border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] mb-8 min-h-16">
+          <TabsTrigger value="materials" className="font-black text-sm sm:text-base data-[state=active]:bg-violet-400 data-[state=active]:text-slate-900 data-[state=active]:border-2 data-[state=active]:border-slate-900 data-[state=active]:shadow-[2px_2px_0px_#0f172a] rounded-xl transition-all h-full min-h-12 border-2 border-transparent uppercase whitespace-nowrap">Materi</TabsTrigger>
           <TabsTrigger value="assignments" className="font-black text-sm sm:text-base data-[state=active]:bg-pink-400 data-[state=active]:text-slate-900 data-[state=active]:border-2 data-[state=active]:border-slate-900 data-[state=active]:shadow-[2px_2px_0px_#0f172a] rounded-xl transition-all h-full min-h-12 border-2 border-transparent uppercase">Tugas</TabsTrigger>
           <TabsTrigger value="quizzes" className="font-black text-sm sm:text-base data-[state=active]:bg-emerald-400 data-[state=active]:text-slate-900 data-[state=active]:border-2 data-[state=active]:border-slate-900 data-[state=active]:shadow-[2px_2px_0px_#0f172a] rounded-xl transition-all h-full min-h-12 border-2 border-transparent uppercase">Ujian</TabsTrigger>
+          <TabsTrigger value="sessions" className="font-black text-sm sm:text-base data-[state=active]:bg-cyan-400 data-[state=active]:text-slate-900 data-[state=active]:border-2 data-[state=active]:border-slate-900 data-[state=active]:shadow-[2px_2px_0px_#0f172a] rounded-xl transition-all h-full min-h-12 border-2 border-transparent uppercase whitespace-nowrap">Absensi</TabsTrigger>
         </TabsList>
 
         {/* TAB 1: MATERI */}
@@ -226,18 +264,23 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
                 <DialogHeader><DialogTitle className="font-black text-2xl">Arsip Baru</DialogTitle></DialogHeader>
                 <form onSubmit={handleAddMaterial} className="space-y-5 mt-4">
                   <div className="space-y-2"><Label className="font-black">Subjek Modul</Label><Input className="h-12 border-4 border-slate-900 font-bold focus:shadow-[2px_2px_0px_#0f172a]" value={mTitle} onChange={e => setMTitle(e.target.value)} required /></div>
+                  <div className="space-y-2"><Label className="font-black">Grup Modul (Opsional)</Label><Input className="h-12 border-4 border-slate-900 font-bold" value={mModuleName} onChange={e => setMModuleName(e.target.value)} placeholder="Misal: Bab 1: Pendahuluan" /></div>
                   <div className="space-y-2"><Label className="font-black">Tipe Informasi</Label>
                     <Select value={mType} onValueChange={setMType}>
                       <SelectTrigger className="h-12 border-4 border-slate-900 font-bold focus:shadow-[2px_2px_0px_#0f172a]"><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="text" className="font-bold">Teks Laporan</SelectItem><SelectItem value="video" className="font-bold">Sinyal Video</SelectItem></SelectContent>
+                      <SelectContent>
+                        <SelectItem value="text" className="font-bold">Teks Laporan</SelectItem>
+                        <SelectItem value="video" className="font-bold">Sinyal Video</SelectItem>
+                        <SelectItem value="file" className="font-bold">Dokumen Rahasia (File)</SelectItem>
+                      </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label className="font-black">{mType === 'video' ? 'Tautan YouTube' : 'Isi Data'}</Label>
-                    {mType === 'video' ? (
-                        <Input className="h-12 border-4 border-slate-900 font-medium focus:shadow-[2px_2px_0px_#0f172a]" value={mContent} onChange={e => setMContent(e.target.value)} placeholder="https://youtube.com/..." required />
-                    ) : (
+                    <Label className="font-black">{mType === 'video' ? 'Tautan YouTube' : mType === 'file' ? 'Tautan File (Gdrive dll)' : 'Isi Data'}</Label>
+                    {mType === 'text' ? (
                         <RichTextEditor value={mContent} onChange={setMContent} placeholder="Tuliskan pengetahuan rahasia di sini..." />
+                    ) : (
+                        <Input className="h-12 border-4 border-slate-900 font-medium focus:shadow-[2px_2px_0px_#0f172a]" value={mContent} onChange={e => setMContent(e.target.value)} placeholder="https://..." required />
                     )}
                   </div>
                   <Button type="submit" className="w-full h-12 bg-violet-500 hover:bg-violet-400 font-black text-slate-900 border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a]" disabled={isSubmitting}>Suntik Data</Button>
@@ -254,8 +297,11 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
                 </div>
                 <CardContent className="p-4 sm:p-6 w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white">
                   <div>
-                    <h4 className="font-black text-xl text-slate-900 flex items-center gap-3">
-                      {m.title} {m.type === 'video' ? <Badge className="bg-orange-100 text-orange-700 border-2 border-slate-900 shadow-sm text-[10px] tracking-wider uppercase font-black px-2"><Video className="h-3 w-3 mr-1" /> Video</Badge> : <Badge className="bg-blue-100 text-blue-700 border-2 border-slate-900 shadow-sm text-[10px] tracking-wider uppercase font-black px-2"><FileText className="h-3 w-3 mr-1" /> Teks</Badge>}
+                    <h4 className="font-black text-xl text-slate-900 flex flex-wrap items-center gap-2 mt-1">
+                      {m.title} 
+                      {m.type === 'video' ? <Badge className="bg-orange-100 text-orange-700 border-2 border-slate-900 shadow-sm text-[10px] tracking-wider uppercase font-black px-2"><Video className="h-3 w-3 mr-1" /> Video</Badge> 
+                       : m.type === 'file' ? <Badge className="bg-emerald-100 text-emerald-700 border-2 border-slate-900 shadow-sm text-[10px] tracking-wider uppercase font-black px-2"><FileText className="h-3 w-3 mr-1" /> File</Badge>
+                       : <Badge className="bg-blue-100 text-blue-700 border-2 border-slate-900 shadow-sm text-[10px] tracking-wider uppercase font-black px-2"><FileText className="h-3 w-3 mr-1" /> Teks</Badge>}
                     </h4>
                     <p className="text-sm font-bold text-slate-500 mt-1 uppercase tracking-wider">REWARD: {m.xp_reward} XP</p>
                   </div>
@@ -273,18 +319,23 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
               <DialogHeader><DialogTitle className="font-black text-2xl">Romba Arsip</DialogTitle></DialogHeader>
               <form onSubmit={handleUpdateMaterial} className="space-y-5 mt-4">
                 <div className="space-y-2"><Label className="font-black">Judul Baru</Label><Input className="h-12 border-4 border-slate-900 font-bold" value={mTitle} onChange={e => setMTitle(e.target.value)} required /></div>
+                <div className="space-y-2"><Label className="font-black">Grup Modul</Label><Input className="h-12 border-4 border-slate-900 font-bold" value={mModuleName} onChange={e => setMModuleName(e.target.value)} /></div>
                 <div className="space-y-2"><Label className="font-black">Tipe Informasi</Label>
                   <Select value={mType} onValueChange={setMType}>
                     <SelectTrigger className="h-12 border-4 border-slate-900 font-bold"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="text" className="font-bold">Teks</SelectItem><SelectItem value="video" className="font-bold">Video</SelectItem></SelectContent>
+                    <SelectContent>
+                      <SelectItem value="text" className="font-bold">Teks</SelectItem>
+                      <SelectItem value="video" className="font-bold">Video</SelectItem>
+                      <SelectItem value="file" className="font-bold">File (Dokumen)</SelectItem>
+                    </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                    <Label className="font-black">{mType === 'video' ? 'Tautan YouTube' : 'Isi Data'}</Label>
-                    {mType === 'video' ? (
-                        <Input className="h-12 border-4 border-slate-900 font-medium" value={mContent} onChange={e => setMContent(e.target.value)} placeholder="https://youtube.com/..." required />
-                    ) : (
+                    <Label className="font-black">{mType === 'video' ? 'Tautan YouTube' : mType === 'file' ? 'Tautan File' : 'Isi Data'}</Label>
+                    {mType === 'text' ? (
                         <RichTextEditor value={mContent} onChange={setMContent} placeholder="Tuliskan pengetahuan rahasia di sini..." />
+                    ) : (
+                        <Input className="h-12 border-4 border-slate-900 font-medium" value={mContent} onChange={e => setMContent(e.target.value)} placeholder="https://..." required />
                     )}
                 </div>
                 <Button type="submit" className="w-full h-12 bg-yellow-400 text-slate-900 font-black border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a]" disabled={isSubmitting}><Save className="mr-2 h-5 w-5" /> Revisi Data</Button>
@@ -336,7 +387,7 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-                      <Link href={`/admin/classes/${id}/assignments/${a.id}`} className="w-full md:w-auto">
+                      <Link href={`/guru/classes/${id}/assignments/${a.id}`} className="w-full md:w-auto">
                         <Button className="w-full bg-slate-900 hover:bg-slate-800 text-pink-300 font-black h-12 border-2 border-transparent shadow-[3px_3px_0px_#f472b6] rounded-xl">
                           Sidak Tugas
                         </Button>
@@ -433,12 +484,12 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2 w-full md:w-auto mt-4 md:mt-0 justify-end md:justify-start">
-                        <Link href={`/admin/classes/${id}/quiz/${qz.id}/results`}>
+                        <Link href={`/guru/classes/${id}/quiz/${qz.id}/results`}>
                            <Button className="w-full md:w-auto bg-amber-400 text-slate-900 hover:bg-amber-300 font-black border-2 border-slate-900 shadow-[2px_2px_0px_#f59e0b] rounded-xl h-12 uppercase tracking-widest text-xs sm:text-sm">
                              <Trophy className="h-4 w-4 mr-2" /> Klasemen
                            </Button>
                         </Link>
-                        <Link href={`/admin/classes/${id}/quiz/${qz.id}/questions`}>
+                        <Link href={`/guru/classes/${id}/quiz/${qz.id}/questions`}>
                           <Button className="w-full md:w-auto bg-slate-900 text-emerald-400 hover:bg-slate-800 font-black border-2 border-slate-900 shadow-[2px_2px_0px_#34d399] rounded-xl h-12 uppercase tracking-widest text-xs sm:text-sm">
                             Racik Soal
                           </Button>
@@ -451,6 +502,67 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
                   </Card>
                 )
               })}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* TAB 4: SESSIONS (ABSENSI) */}
+        <TabsContent value="sessions" className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b-4 border-slate-900 pb-4">
+            <h3 className="text-3xl font-black text-slate-900 uppercase">Gelar Pasukan (Absen)</h3>
+            <Dialog open={isSessionOpen} onOpenChange={setIsSessionOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-cyan-400 hover:bg-cyan-300 text-slate-900 h-12 font-black border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] hover:translate-y-1 transition-all rounded-xl">
+                  <Fingerprint className="mr-2 h-5 w-5" /> Buka Sesi Hari Ini
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="border-4 border-slate-900 shadow-[12px_12px_0px_#0f172a] rounded-[32px]">
+                <DialogHeader><DialogTitle className="font-black text-2xl">Buka Titik Presensi</DialogTitle></DialogHeader>
+                <form onSubmit={handleAddSession} className="space-y-5 mt-4">
+                  <div className="space-y-2">
+                    <Label className="font-black">Tanggal Operasi</Label>
+                    <Input type="date" className="h-12 border-4 border-slate-900 font-bold" value={sessionDate} onChange={e => setSessionDate(e.target.value)} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-black">Tenggat Waktu Kiamat (Opsional)</Label>
+                    <Input type="datetime-local" className="h-12 border-4 border-slate-900 font-bold" value={sessionExpiry} onChange={e => setSessionExpiry(e.target.value)} />
+                    <p className="text-xs font-bold text-slate-500 uppercase">Kosongkan untuk otomatis hangus tengah malam.</p>
+                  </div>
+                  <Button type="submit" className="w-full h-12 bg-cyan-400 text-slate-900 font-black border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a]" disabled={isSubmitting}>Keluarkan Sandi</Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {classSessions.length === 0 ? (
+            <div className="text-center py-20 border-4 border-dashed border-slate-300 rounded-[32px] bg-white">
+              <Fingerprint className="h-16 w-16 text-slate-200 mx-auto transform -rotate-12" />
+              <h3 className="font-black text-2xl mt-4">Anggota Liar</h3>
+              <p className="font-bold text-slate-400">Belum pernah ada absen. Buka sesi sekarang!</p>
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              {classSessions.map((session) => (
+                <Card key={session.id} className="group border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a] rounded-[24px] bg-white hover:-translate-y-1 transition-all flex flex-col md:flex-row overflow-hidden">
+                  <div className="w-full md:w-24 shrink-0 border-b-4 md:border-b-0 md:border-r-4 border-slate-900 bg-cyan-200 flex flex-col items-center justify-center py-4 md:py-0 text-slate-900">
+                    <span className="text-xs font-black uppercase mb-1">TGL</span>
+                    <span className="text-2xl font-black">{new Date(session.session_date).getDate()}</span>
+                    <span className="text-xs font-black uppercase text-center mt-1 outline-dashed outline-2 outline-slate-900 px-1">{new Date(session.session_date).toLocaleString('id-ID', { month: 'short' })}</span>
+                  </div>
+                  <CardContent className="p-4 sm:p-6 w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">KODE RAHASIA:</div>
+                      <h4 className="font-black text-4xl text-slate-900 font-mono tracking-widest">{session.unique_code}</h4>
+                      <p className="text-sm font-bold text-red-500 mt-2 uppercase flex items-center gap-1"><Clock className="h-4 w-4" /> Hangus: {new Date(session.expires_at).toLocaleString()}</p>
+                    </div>
+                    <div className="flex gap-2 w-full sm:w-auto">
+                      <Button variant="ghost" className="w-full h-12 sm:w-12 p-0 text-slate-600 shrink-0 bg-red-100 hover:bg-red-400 hover:text-white border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] rounded-xl hover:-translate-y-1 transition-all" onClick={() => handleDelete('class_sessions', session.id)}>
+                        <Trash2 className="h-5 w-5" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
         </TabsContent>

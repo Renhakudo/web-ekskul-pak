@@ -117,7 +117,7 @@ export default function AdminAssignmentGradingPage({
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-pink-300 border-4 border-slate-900 shadow-[8px_8px_0px_#0f172a] rounded-[32px] p-6 md:p-8 relative overflow-hidden">
         <div className="flex items-center gap-5 relative z-10 w-full md:w-auto">
-          <Link href={`/admin/classes/${classId}`} className="shrink-0">
+          <Link href={`/guru/classes/${classId}`} className="shrink-0">
             <Button size="icon" className="h-12 w-12 bg-white text-slate-900 border-4 border-slate-900 shadow-[2px_2px_0px_#0f172a] hover:bg-slate-200 rounded-2xl transform -rotate-3 transition-transform hover:rotate-0">
               <ArrowLeft className="h-6 w-6" />
             </Button>

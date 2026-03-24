@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Settings, CalendarCheck, UserPlus, Loader2, AlertTriangle } from 'lucide-react'
+import { toast } from 'sonner'
 
 export default function AdminSettingsPage() {
   const supabase = createClient()
@@ -41,9 +42,11 @@ export default function AdminSettingsPage() {
       .eq('id', 1)
 
     if (error) {
-      alert("Gagal menyimpan pengaturan. Pastikan akun ini adalah Admin/Guru. Error: " + error.message)
+      toast.error("Gagal menyimpan pengaturan. Pastikan akun ini adalah Admin/Guru. Error: " + error.message)
       if (field === 'is_attendance_open') setAttendanceOpen(currentValue)
       if (field === 'is_registration_open') setRegistrationOpen(currentValue)
+    } else {
+      toast.success("Pengaturan situs berhasil diperbarui!")
     }
     setSaving(false)
   }

@@ -32,12 +32,16 @@ export default function ManageClassesPage() {
 
   const fetchClasses = async () => {
     setLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
     const { data, error } = await supabase
       .from('classes')
       .select(`
         *,
         materials (count)
       `)
+      .eq('created_by', user.id)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -70,7 +74,7 @@ export default function ManageClassesPage() {
     if (error) {
       toast.error('Gagal membuat kelas: ' + error.message)
     } else {
-      toast.success('Kelas rahasia berhasil dirakit!')
+      toast.success('Kelas baru berhasil diluncurkan!')
       setIsOpen(false)
       setTitle('')
       setDesc('')
@@ -170,7 +174,7 @@ export default function ManageClassesPage() {
                     <PlayCircle className="h-5 w-5" />
                     {item.materials ? item.materials[0]?.count : 0} Modul
                   </div>
-                  <Link href={`/admin/classes/${item.id}`}>
+                    <Link href={`/guru/classes/${item.id}`}>
                     <Button className="h-12 px-5 bg-slate-900 hover:bg-slate-800 text-white font-black border-2 border-slate-900 shadow-[3px_3px_0px_#34d399] rounded-xl group-hover:-translate-y-1 transition-transform">
                       Kelola Panel <ChevronRight className="ml-2 h-5 w-5" />
                     </Button>

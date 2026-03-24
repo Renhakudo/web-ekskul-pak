@@ -60,7 +60,7 @@ export default function MaterialPlayerPage({
       if (!user) return
 
       const materialPromise = supabase.from('materials').select('*').eq('id', materialId).single()
-      const playlistPromise = supabase.from('materials').select('id, title, type, xp_reward').eq('class_id', classId).order('created_at', { ascending: true })
+      const playlistPromise = supabase.from('materials').select('id, title, module_name, type, file_url, xp_reward').eq('class_id', classId).order('created_at', { ascending: true })
       const logsPromise = supabase.from('points_logs').select('source').eq('user_id', user.id).ilike('source', 'material_%')
 
       const [matRes, listRes, logsRes] = await Promise.all([materialPromise, playlistPromise, logsPromise])
@@ -169,9 +169,12 @@ export default function MaterialPlayerPage({
                 <ArrowLeft className="h-5 w-5" />
               </Button>
             </Link>
-            <h1 className="font-black text-xl lg:text-2xl text-slate-900 line-clamp-1 uppercase" title={material.title}>
-              {material.title}
-            </h1>
+            <div>
+              <p className="text-xs font-black text-slate-700 uppercase tracking-widest leading-none mb-1">{material.module_name || 'Materi Ekstra'}</p>
+              <h1 className="font-black text-xl lg:text-2xl text-slate-900 line-clamp-1 uppercase leading-tight" title={material.title}>
+                {material.title}
+              </h1>
+            </div>
           </div>
 
           <div className="hidden sm:flex items-center gap-4 bg-white px-4 py-2 border-4 border-slate-900 rounded-xl shadow-[4px_4px_0px_#0f172a] transform rotate-1">
@@ -205,6 +208,18 @@ export default function MaterialPlayerPage({
                     className="w-full h-full"
                   />
                 </div>
+              ) : material.type === 'file' && material.file_url ? (
+                <div className="h-64 md:h-80 bg-emerald-300 flex flex-col items-center justify-center p-8 text-center border-b-4 border-slate-900 bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.2)_25%,rgba(255,255,255,0.2)_50%,transparent_50%,transparent_75%,rgba(255,255,255,0.2)_75%,rgba(255,255,255,0.2)_100%)] bg-[length:20px_20px]">
+                  <div className="bg-white p-5 rounded-3xl border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a] transform -rotate-3 mb-6">
+                    <FileText className="h-14 w-14 text-emerald-600" />
+                  </div>
+                  <h2 className="text-2xl md:text-3xl font-black text-slate-900 uppercase bg-white/90 px-6 py-2 border-4 border-slate-900 rounded-xl shadow-[4px_4px_0px_#0f172a] transform rotate-1 mb-6">{material.title}</h2>
+                  <a href={material.file_url} target="_blank" rel="noopener noreferrer">
+                    <Button className="h-14 px-8 bg-slate-900 hover:bg-slate-800 text-emerald-300 font-black border-4 border-slate-900 shadow-[4px_4px_0px_#34d399] rounded-xl text-lg hover:-translate-y-1 transition-all">
+                      Buka Dokumen Rahasia <ChevronRight className="ml-2 h-6 w-6" />
+                    </Button>
+                  </a>
+                </div>
               ) : (
                 <div className="h-48 md:h-64 bg-violet-300 flex flex-col items-center justify-center p-8 text-center border-b-4 border-slate-900 bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.2)_25%,rgba(255,255,255,0.2)_50%,transparent_50%,transparent_75%,rgba(255,255,255,0.2)_75%,rgba(255,255,255,0.2)_100%)] bg-[length:20px_20px]">
                   <div className="bg-white p-4 rounded-2xl border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] transform -rotate-3 mb-4">
@@ -218,7 +233,7 @@ export default function MaterialPlayerPage({
                 <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
                   <div className="flex items-center gap-3">
                     <Badge className="bg-blue-300 text-slate-900 hover:bg-blue-400 font-black border-2 border-slate-900 shadow-sm px-3 py-1 uppercase text-xs md:text-sm">
-                      {material.type === 'video' ? 'Rekaman CCTV' : 'Dokumen Teks'}
+                      {material.type === 'video' ? 'Rekaman CCTV' : material.type === 'file' ? 'File Berkas' : 'Dokumen Teks'}
                     </Badge>
                     <Badge className="bg-yellow-300 text-slate-900 hover:bg-yellow-400 font-black border-2 border-slate-900 shadow-sm px-3 py-1 uppercase text-xs md:text-sm">
                       +{material.xp_reward} Kekuatan
@@ -244,7 +259,7 @@ export default function MaterialPlayerPage({
                   />
                 ) : (
                   <div className="text-slate-500 font-bold text-lg text-center py-8">
-                    {material.type === 'video' ? 'Tonton sinyal rekaman dengan hikmat.' : 'Naskah ini kosong.'}
+                    {material.type === 'video' ? 'Tonton sinyal rekaman dengan hikmat.' : material.type === 'file' ? 'Gunakan tombol di atas untuk membuka dokumen.' : 'Naskah ini kosong.'}
                   </div>
                 )}
               </div>
@@ -337,7 +352,7 @@ export default function MaterialPlayerPage({
                       {item.title}
                     </h4>
                     <span className="inline-flex items-center gap-1 mt-2 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 border-2 rounded bg-slate-100 text-slate-600 border-slate-300">
-                      {item.type === 'video' ? 'Kaset' : 'Naskah'}
+                      {item.type === 'video' ? 'Kaset' : item.type === 'file' ? 'Arsip' : 'Naskah'}
                     </span>
                   </div>
                 </Link>

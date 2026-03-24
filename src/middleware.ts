@@ -35,18 +35,20 @@ export async function middleware(request: NextRequest) {
       .single()
     
     const role = profile?.role
-    if (role === 'admin' || role === 'guru') {
+    if (role === 'admin') {
       return NextResponse.redirect(new URL('/admin', request.url))
+    } else if (role === 'guru') {
+      return NextResponse.redirect(new URL('/guru', request.url))
     }
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  // 2. Proteksi rute: user belum login tapi akses /dashboard atau /admin
-  if (!user && (pathname.startsWith('/dashboard') || pathname.startsWith('/admin'))) {
+  // 2. Proteksi rute: user belum login tapi akses /dashboard, /admin, /guru
+  if (!user && (pathname.startsWith('/dashboard') || pathname.startsWith('/admin') || pathname.startsWith('/guru'))) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // 3. Proteksi Halaman Admin: harus login dan punya role yang valid
+  // 3. Proteksi Halaman Admin: harus login dan punya role admin
   if (user && pathname.startsWith('/admin')) {
     const { data: profile } = await supabase
       .from('profiles')
@@ -54,7 +56,20 @@ export async function middleware(request: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    const isAllowed = profile?.role === 'admin' || profile?.role === 'guru'
+    if (profile?.role !== 'admin') {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
+  }
+
+  // 4. Proteksi Halaman Guru: harus login dan punya role guru (atau admin)
+  if (user && pathname.startsWith('/guru')) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    const isAllowed = profile?.role === 'guru' || profile?.role === 'admin'
     if (!isAllowed) {
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }
@@ -66,5 +81,5 @@ export async function middleware(request: NextRequest) {
 export const config = {
   // Sertakan /login agar bisa redirect user yang sudah login
   // Kecualikan auth/callback agar tidak ter-intercept saat OAuth flow
-  matcher: ['/dashboard/:path*', '/admin/:path*', '/login'],
+  matcher: ['/dashboard/:path*', '/admin/:path*', '/guru/:path*', '/login'],
 }

@@ -90,7 +90,7 @@ export default function AdminQuizResultsPage({
     <div className="flex-1 flex flex-col min-h-screen bg-slate-100 font-sans">
       <header className="h-20 bg-amber-400 flex items-center justify-between px-6 lg:px-10 border-b-4 border-slate-900 shrink-0 sticky top-0 z-30">
         <div className="flex items-center gap-4">
-          <Link href={`/admin/classes/${classId}`}>
+          <Link href={`/guru/classes/${classId}`}>
             <Button size="icon" className="bg-white hover:bg-slate-200 text-slate-900 border-4 border-slate-900 shadow-[2px_2px_0px_#0f172a] rounded-xl">
               <ArrowLeft className="h-5 w-5" />
             </Button>

@@ -4,6 +4,7 @@ import React, { useRef, useState } from 'react'
 import { toPng } from 'html-to-image'
 import { Button } from '@/components/ui/button'
 import { Download } from 'lucide-react'
+import { toast } from 'sonner'
 
 interface ShareableCardProps {
   children: React.ReactNode
@@ -39,7 +40,7 @@ export default function ShareableCard({ children, username }: ShareableCardProps
 
     } catch (error) {
       console.error('Failed to generate image', error)
-      alert("Gagal mengekstrak gambar, coba lagi nanti.")
+      toast.error("Gagal mengekstrak gambar, coba lagi nanti.")
     } finally {
       setIsDownloading(false)
     }
