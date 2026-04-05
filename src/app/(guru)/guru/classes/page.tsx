@@ -8,30 +8,34 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { Plus, BookOpen, ChevronRight, Loader2, PlayCircle, FolderOpen, AlignLeft } from 'lucide-react'
+import { Plus, BookOpen, ChevronRight, Loader2, PlayCircle, FolderOpen, AlignLeft, Sparkles, Map, Search } from 'lucide-react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 
 interface ClassItem {
   id: string
   title: string
   description: string
-  materials: { count: number }[]
+  materials: any // Tipe dibuat 'any' karena respon Supabase bisa array/object
 }
 
 export default function ManageClassesPage() {
   const supabase = createClient()
-  const router = useRouter()
   const [classes, setClasses] = useState<ClassItem[]>([])
   const [loading, setLoading] = useState(true)
   const [isOpen, setIsOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // State Form
   const [title, setTitle] = useState('')
   const [desc, setDesc] = useState('')
 
+  // State Live Search
+  const [searchQuery, setSearchQuery] = useState('')
+
   const fetchClasses = async () => {
-    setLoading(true)
+    // Jangan set loading true jika data sudah ada, agar tidak kedip saat Real-Time update
+    if (classes.length === 0) setLoading(true)
+
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
@@ -41,11 +45,12 @@ export default function ManageClassesPage() {
         *,
         materials (count)
       `)
-      .eq('created_by', user.id)
+      .eq('created_by', user.id) // Pastikan HANYA mengambil kelas buatan guru ini
       .order('created_at', { ascending: false })
 
     if (error) {
       console.error('Error fetching classes:', error)
+      toast.error('Gagal memuat direktori kelas.')
     } else {
       setClasses(data as any)
     }
@@ -54,6 +59,18 @@ export default function ManageClassesPage() {
 
   useEffect(() => {
     fetchClasses()
+
+    // 🪄 MAGIC: Real-Time Auto Update!
+    const channel = supabase
+      .channel('guru_classes_channel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'classes' }, () => {
+        fetchClasses()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -61,7 +78,10 @@ export default function ManageClassesPage() {
     setIsSubmitting(true)
 
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) {
+      setIsSubmitting(false)
+      return
+    }
 
     const { error } = await supabase
       .from('classes')
@@ -74,7 +94,7 @@ export default function ManageClassesPage() {
     if (error) {
       toast.error('Gagal membuat kelas: ' + error.message)
     } else {
-      toast.success('Kelas baru berhasil diluncurkan!')
+      toast.success('Kelas baru berhasil diluncurkan! 🚀')
       setIsOpen(false)
       setTitle('')
       setDesc('')
@@ -83,59 +103,83 @@ export default function ManageClassesPage() {
     setIsSubmitting(false)
   }
 
+  // Filter Live Search
+  const filteredClasses = classes.filter(c => 
+    c.title?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    c.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
   return (
-    <div className="p-6 md:p-8 space-y-10 max-w-7xl mx-auto min-h-screen font-sans">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-emerald-100 border-4 border-slate-900 shadow-[8px_8px_0px_#0f172a] rounded-[32px] p-8 md:p-10 relative mt-2">
-        <div className="relative z-10">
-          <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight flex items-center gap-4">
-            <div className="bg-emerald-400 p-3 rounded-2xl border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] transform rotate-3">
-              <FolderOpen className="h-10 w-10 text-slate-900" />
+    <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto min-h-screen font-sans relative z-0 overflow-x-hidden pb-24">
+      
+      {/* ====== BACKGROUND DOT PATTERN ====== */}
+      <div className="absolute inset-0 z-[-1] bg-[radial-gradient(#cbd5e1_2px,transparent_2px)] [background-size:32px_32px] opacity-40 fixed"></div>
+
+      {/* ====== HEADER GURU ====== */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-emerald-300 border-4 border-slate-900 shadow-[8px_8px_0px_#0f172a] md:shadow-[12px_12px_0px_#0f172a] rounded-[2rem] md:rounded-[3rem] p-6 md:p-10 relative overflow-hidden mt-4">
+        {/* Dekorasi Garis Miring */}
+        <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'repeating-linear-gradient(45deg, #000 0, #000 2px, transparent 2px, transparent 10px)' }}></div>
+        
+        <div className="relative z-10 flex-1">
+          <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight flex items-center gap-4 uppercase drop-shadow-sm">
+            <div className="bg-white p-3 rounded-2xl border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] transform rotate-3 hover:-rotate-6 transition-transform shrink-0">
+              <FolderOpen className="h-8 w-8 md:h-10 md:w-10 text-emerald-600" />
             </div>
-            Direktori Kelas
+            Direktori Modul
           </h1>
-          <p className="text-slate-700 font-bold text-lg mt-3 bg-white inline-block px-4 py-1 border-2 border-slate-900 rounded-xl shadow-sm -rotate-1">
-            Buat kompilasi misi seru untuk para pahlawan amatir ekskulmu.
+          <p className="text-slate-800 font-bold text-base md:text-lg mt-4 md:mt-5 bg-white/70 inline-block px-4 py-1.5 border-2 border-slate-900 rounded-xl shadow-sm -rotate-1 hover:rotate-1 transition-transform backdrop-blur-sm">
+            Buat dan rancang kompilasi misi seru khusus untuk pasukanmu.
           </p>
         </div>
 
         {/* Modal Tambah Kelas */}
-        <div className="relative z-10 shrink-0">
+        <div className="relative z-10 shrink-0 mt-2 lg:mt-0">
           <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-              <Button className="h-14 px-6 md:px-8 text-lg font-black bg-emerald-400 hover:bg-emerald-300 text-slate-900 border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a] hover:translate-y-1 hover:shadow-[2px_2px_0px_#0f172a] transition-all rounded-2xl">
-                <Plus className="mr-2 h-6 w-6" /> Rilis Kelas Baru
+              <Button className="w-full lg:w-auto h-14 md:h-16 px-6 md:px-8 text-base md:text-lg font-black uppercase tracking-wider bg-yellow-400 hover:bg-yellow-300 text-slate-900 border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a] active:shadow-none active:translate-y-[6px] active:translate-x-[6px] hover:-translate-y-1 hover:shadow-[8px_8px_0px_#0f172a] transition-all rounded-[1.5rem]">
+                <Plus className="mr-2 h-6 w-6" /> Rilis Modul Baru
               </Button>
             </DialogTrigger>
-            <DialogContent className="border-4 border-slate-900 shadow-[12px_12px_0px_#0f172a] rounded-[32px] sm:max-w-md p-8">
+            
+            {/* ISI MODAL FORM */}
+            <DialogContent className="border-4 border-slate-900 shadow-[12px_12px_0px_#0f172a] rounded-[2rem] sm:max-w-md p-6 md:p-8 bg-[#FDFBF7]">
               <DialogHeader>
-                <DialogTitle className="text-3xl font-black text-slate-900">Rakit Misi Baru</DialogTitle>
-                <CardDescription className="font-bold text-slate-500 mt-2">Bikin para siswa pusing tapi nagih.</CardDescription>
+                <DialogTitle className="text-2xl md:text-3xl font-black text-slate-900 uppercase flex items-center gap-3">
+                  <Sparkles className="w-6 h-6 text-yellow-500 fill-yellow-400" /> Rakit Misi Baru
+                </DialogTitle>
+                <CardDescription className="font-bold text-slate-600 mt-2 text-sm md:text-base">
+                  Bikin materi yang bikin siswa pusing tapi nagih!
+                </CardDescription>
               </DialogHeader>
-              <form onSubmit={handleCreate} className="space-y-6 mt-4">
-                <div className="space-y-2">
-                  <Label className="font-black text-slate-800 uppercase text-sm">Nama Sandi / Modul</Label>
-                  <Input
-                    placeholder="Contoh: Operasi Penguasaan React..."
-                    className="h-14 font-bold text-lg border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] rounded-2xl focus-visible:ring-0 focus:shadow-[2px_2px_0px_#0f172a] focus:translate-y-1 transition-all"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="font-black text-slate-800 uppercase text-sm">Intel singkat (Deskripsi)</Label>
+              
+              <form onSubmit={handleCreate} className="space-y-6 mt-2">
+                <div className="space-y-2 relative">
+                  <Label className="font-black text-slate-900 uppercase text-xs ml-1">Nama Sandi / Modul</Label>
                   <div className="relative">
-                    <AlignLeft className="absolute left-4 top-4 h-6 w-6 text-slate-400" />
+                    <FolderOpen className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                     <Input
-                      placeholder="Apa inti misinya..."
-                      className="pl-14 h-14 font-medium text-lg border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] rounded-2xl focus-visible:ring-0 focus:shadow-[2px_2px_0px_#0f172a] focus:translate-y-1 transition-all"
+                      placeholder="Misal: Operasi React JS"
+                      className="pl-12 h-14 font-bold text-base md:text-lg border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] rounded-2xl focus-visible:ring-0 focus:shadow-[2px_2px_0px_#0f172a] focus:translate-y-1 transition-all bg-white"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2 relative">
+                  <Label className="font-black text-slate-900 uppercase text-xs ml-1">Intel Singkat (Deskripsi)</Label>
+                  <div className="relative">
+                    <AlignLeft className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                    <Input
+                      placeholder="Apa tujuan utama modul ini..."
+                      className="pl-12 h-14 font-medium text-base md:text-lg border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] rounded-2xl focus-visible:ring-0 focus:shadow-[2px_2px_0px_#0f172a] focus:translate-y-1 transition-all bg-white"
                       value={desc}
                       onChange={(e) => setDesc(e.target.value)}
                     />
                   </div>
                 </div>
-                <Button type="submit" className="w-full h-14 bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-black text-xl border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] hover:shadow-[2px_2px_0px_#0f172a] hover:translate-y-1 transition-all rounded-2xl" disabled={isSubmitting}>
-                  {isSubmitting ? <Loader2 className="h-6 w-6 animate-spin" /> : 'Luncurkan Kelas'}
+                <Button type="submit" className="w-full h-16 bg-emerald-400 hover:bg-emerald-300 text-slate-900 font-black text-lg uppercase tracking-wider border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a] active:shadow-none active:translate-y-1 hover:-translate-y-1 hover:shadow-[8px_8px_0px_#0f172a] transition-all rounded-2xl mt-4" disabled={isSubmitting}>
+                  {isSubmitting ? <Loader2 className="h-6 w-6 animate-spin" /> : 'Luncurkan Modul'}
                 </Button>
               </form>
             </DialogContent>
@@ -143,39 +187,79 @@ export default function ManageClassesPage() {
         </div>
       </div>
 
-      {/* List Kelas */}
+      {/* ====== CONTROL BAR (LIVE SEARCH) ====== */}
+      <div className="flex bg-white p-4 rounded-3xl border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a]">
+        <div className="relative w-full">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-6 w-6 text-slate-400" />
+          <Input 
+            placeholder="Cari nama atau deskripsi kelas..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-14 pl-12 pr-4 bg-slate-50 border-2 border-slate-300 focus:border-slate-900 rounded-2xl font-bold text-base md:text-lg focus-visible:ring-0 focus:shadow-[4px_4px_0px_#0f172a] transition-all"
+          />
+        </div>
+      </div>
+
+      {/* ====== DAFTAR KELAS ====== */}
       {loading ? (
-        <div className="flex justify-center py-20"><Loader2 className="h-12 w-12 animate-spin text-slate-900" /></div>
-      ) : classes.length === 0 ? (
-        <div className="text-center py-24 border-4 border-dashed border-slate-300 rounded-[32px] bg-slate-50">
-          <div className="w-24 h-24 bg-slate-200 border-2 border-slate-400 rounded-full flex items-center justify-center mx-auto mb-6">
+        <div className="flex flex-col items-center justify-center py-20">
+          <Loader2 className="h-14 w-14 animate-spin text-emerald-500 mb-4" />
+          <p className="font-black text-slate-500 uppercase tracking-widest">Memeriksa Arsip...</p>
+        </div>
+      ) : filteredClasses.length === 0 ? (
+        <div className="text-center py-24 md:py-32 border-4 border-dashed border-slate-400 rounded-[2rem] md:rounded-[3rem] bg-white/50 relative overflow-hidden">
+          <div className="w-24 h-24 bg-slate-200 border-4 border-slate-400 rounded-full flex items-center justify-center mx-auto mb-6 transform -rotate-12 shadow-inner">
             <BookOpen className="h-12 w-12 text-slate-400" />
           </div>
-          <h3 className="text-2xl font-black text-slate-900">Zonanya Masih Kosong</h3>
-          <p className="font-bold text-slate-500 mt-2 text-lg">Ayo rilis kelas pertamamu segera, komandan!</p>
+          <h3 className="text-3xl font-black text-slate-900 uppercase">
+            {searchQuery ? 'Modul Tidak Ditemukan' : 'Zonanya Masih Kosong'}
+          </h3>
+          <p className="font-bold text-slate-500 mt-2 text-lg">
+            {searchQuery ? 'Coba gunakan kata kunci lain.' : 'Ayo rilis kelas pertamamu segera, Master!'}
+          </p>
         </div>
       ) : (
-        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-          {classes.map((item, idx) => {
-            const rotClass = idx % 2 === 0 ? 'hover:rotate-1' : 'hover:-rotate-1'
+        <div className="grid gap-6 md:gap-8 md:grid-cols-2 lg:grid-cols-3 pt-2">
+          {filteredClasses.map((item, idx) => {
+            // Logika Hover Rotasi bergantian
+            const rotClass = idx % 2 === 0 ? 'hover:-rotate-2' : 'hover:rotate-2'
+            
+            // Random Color Bar
+            const barColors = ['bg-yellow-400', 'bg-pink-400', 'bg-blue-400', 'bg-emerald-400', 'bg-violet-400']
+            const randomBarColor = barColors[idx % barColors.length]
+            
+            // Ekstraksi jumlah materi yang SUPER AMAN
+            const matCount = Array.isArray(item.materials) 
+              ? item.materials[0]?.count 
+              : (item.materials as any)?.count || 0
+
             return (
-              <Card key={item.id} className={`group flex flex-col border-4 border-slate-900 shadow-[8px_8px_0px_#0f172a] rounded-[32px] bg-white overflow-hidden hover:-translate-y-2 hover:shadow-[4px_4px_0px_#0f172a] ${rotClass} transition-all`}>
-                <div className="h-6 bg-emerald-400 border-b-4 border-slate-900 w-full" />
-                <CardHeader className="p-6 pb-2">
-                  <CardTitle className="text-2xl font-black text-slate-900 group-hover:text-emerald-700 transition-colors leading-tight line-clamp-2">
+              <Card key={item.id} className={`group flex flex-col border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a] rounded-[2rem] bg-white overflow-hidden hover:-translate-y-3 hover:shadow-[12px_12px_0px_#0f172a] ${rotClass} transition-all duration-300 cursor-default`}>
+                
+                {/* Top Bar Neobrutalism */}
+                <div className={`h-8 w-full ${randomBarColor} border-b-4 border-slate-900 flex items-center px-4`}>
+                    <div className="flex gap-1.5">
+                      <div className="w-3 h-3 rounded-full bg-white/50 border-2 border-slate-900"></div>
+                      <div className="w-3 h-3 rounded-full bg-white/50 border-2 border-slate-900"></div>
+                    </div>
+                </div>
+
+                <CardHeader className="p-6 md:p-8 pb-2">
+                  <CardTitle className="text-2xl md:text-3xl font-black text-slate-900 group-hover:text-emerald-600 transition-colors leading-tight line-clamp-2">
                     {item.title}
                   </CardTitle>
-                  <CardDescription className="font-bold text-slate-600 line-clamp-2 mt-2 text-base h-12">
-                    {item.description || 'Intel kofidensial. Tidak ada deskripsi tertulis.'}
+                  <CardDescription className="font-bold text-slate-600 line-clamp-2 mt-3 text-base h-12 leading-relaxed">
+                    {item.description || 'Intel kofidensial. Tidak ada deskripsi tertulis yang ditinggalkan.'}
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="mt-auto p-6 pt-6 bg-white border-t-2 border-slate-100 flex items-end justify-between">
-                  <div className="text-base font-black text-emerald-800 bg-emerald-200 border-2 border-emerald-300 px-4 py-1.5 rounded-xl flex items-center gap-2">
-                    <PlayCircle className="h-5 w-5" />
-                    {item.materials ? item.materials[0]?.count : 0} Modul
+
+                <CardContent className="mt-auto p-6 md:p-8 pt-6 flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4">
+                  <div className="text-sm font-black text-slate-900 bg-slate-100 border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] px-3 py-1.5 rounded-xl flex items-center gap-2 uppercase tracking-wider w-fit">
+                    <PlayCircle className="h-4 w-4 text-emerald-600" />
+                    {matCount} Modul
                   </div>
-                    <Link href={`/guru/classes/${item.id}`}>
-                    <Button className="h-12 px-5 bg-slate-900 hover:bg-slate-800 text-white font-black border-2 border-slate-900 shadow-[3px_3px_0px_#34d399] rounded-xl group-hover:-translate-y-1 transition-transform">
+                  <Link href={`/guru/classes/${item.id}`} className="w-full sm:w-auto">
+                    <Button className="w-full sm:w-auto h-12 md:h-14 px-6 bg-slate-900 hover:bg-slate-800 text-white font-black text-sm md:text-base border-4 border-transparent shadow-[4px_4px_0px_#cbd5e1] rounded-xl group-hover:shadow-none group-hover:translate-y-[4px] group-hover:translate-x-[4px] transition-all uppercase tracking-wider">
                       Kelola Panel <ChevronRight className="ml-2 h-5 w-5" />
                     </Button>
                   </Link>
