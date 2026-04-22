@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { logActivity } from './activity-logger'
 
 /**
  * Memeriksa dan memberikan badge yang layak diterima oleh user.
@@ -42,6 +43,7 @@ export async function awardEligibleBadges(userId: string, supabase: SupabaseClie
 
         // 6. Cek setiap badge — award jika memenuhi syarat dan belum punya
         const badgesToAward: { badge_id: string; user_id: string }[] = []
+        const badgeDetails: Array<{ id: string; name: string; icon: string }> = []
 
         for (const badge of allBadges) {
             if (ownedIds.has(badge.id)) continue // sudah punya, skip
@@ -65,6 +67,7 @@ export async function awardEligibleBadges(userId: string, supabase: SupabaseClie
 
             if (qualified) {
                 badgesToAward.push({ badge_id: badge.id, user_id: userId })
+                badgeDetails.push({ id: badge.id, name: badge.name, icon: badge.icon || '🏅' })
             }
         }
 
@@ -73,6 +76,20 @@ export async function awardEligibleBadges(userId: string, supabase: SupabaseClie
             await supabase
                 .from('user_badges')
                 .upsert(badgesToAward, { onConflict: 'user_id,badge_id', ignoreDuplicates: true })
+
+            // Log setiap badge yang diperoleh ke activity_logs
+            for (const badge of badgeDetails) {
+                await logActivity(supabase, {
+                    userId,
+                    eventType: 'badge_earned',
+                    eventCategory: 'gamification',
+                    metadata: {
+                        badgeId: badge.id,
+                        badgeName: badge.name,
+                        badgeIcon: badge.icon,
+                    },
+                })
+            }
         }
 
         return badgesToAward.length // Jumlah badge baru yang didapat

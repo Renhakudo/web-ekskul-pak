@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -13,7 +13,9 @@ import { AdminUserActions } from './AdminUserActions'
 export default function AdminUsersPage() {
     const supabase = createClient()
 
-    const [currentUser, setCurrentUser] = useState<any>(null)
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+    // isAdmin diambil secara terpisah & independen agar tidak terpengaruh filter/search
+    const [isAdmin, setIsAdmin] = useState(false)
     const [profiles, setProfiles] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
@@ -22,11 +24,8 @@ export default function AdminUsersPage() {
     const [searchQuery, setSearchQuery] = useState('')
     const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'guru' | 'siswa'>('all')
 
-    // Mengambil Data Profil dan Session
-    const fetchProfiles = async () => {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) setCurrentUser(user)
-
+    // Mengambil Data Profil
+    const fetchProfiles = useCallback(async () => {
         const { data, error } = await supabase
             .from('profiles')
             .select('*')
@@ -34,17 +33,38 @@ export default function AdminUsersPage() {
 
         if (error) setError(error.message)
         else setProfiles(data || [])
-        
+
         setLoading(false)
-    }
+    }, [supabase])
+
+    // Fetch role user aktif secara terpisah — tidak bergantung pada array profiles
+    // Ini menghindari bug: jika profiles kosong/terpotong, isAdmin tetap akurat
+    const fetchCurrentUserRole = useCallback(async () => {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+
+        setCurrentUserId(user.id)
+
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single()
+
+        if (profile?.role === 'admin') {
+            setIsAdmin(true)
+        }
+    }, [supabase])
 
     useEffect(() => {
+        // Fetch paralel: role user aktif dan semua profil
+        fetchCurrentUserRole()
         fetchProfiles()
 
         // 🪄 MAGIC: Real-Time Auto Update!
-        // Jika ada perubahan data di tabel profiles (user baru/ubah role), layar akan otomatis update!
+        // Jika ada perubahan data di tabel profiles (user baru/ubah role), layar auto-update
         const channel = supabase
-            .channel('public:profiles')
+            .channel('admin:profiles-watch')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
                 fetchProfiles()
             })
@@ -53,31 +73,29 @@ export default function AdminUsersPage() {
         return () => {
             supabase.removeChannel(channel)
         }
-    }, [])
-
-    const isAdmin = profiles.find(p => p.id === currentUser?.id)?.role === 'admin'
+    }, [fetchCurrentUserRole, fetchProfiles, supabase])
 
     const roleCount = {
         admin: profiles.filter(p => p.role === 'admin').length || 0,
-        guru: profiles.filter(p => p.role === 'guru').length || 0,
+        guru:  profiles.filter(p => p.role === 'guru').length || 0,
         siswa: profiles.filter(p => p.role === 'siswa').length || 0,
     }
 
     // Logic Filtering
     const filteredProfiles = profiles.filter(profile => {
-        const matchesSearch = profile.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                              profile.username?.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesRole = roleFilter === 'all' || profile.role === roleFilter;
-        return matchesSearch && matchesRole;
+        const matchesSearch = profile.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                              profile.username?.toLowerCase().includes(searchQuery.toLowerCase())
+        const matchesRole = roleFilter === 'all' || profile.role === roleFilter
+        return matchesSearch && matchesRole
     })
 
-    // Logic Export CSV (Fitur Wajib Admin)
+    // Logic Export CSV
     const handleExportCSV = () => {
-        const headers = ['ID', 'Nama Lengkap', 'Username', 'Pangkat', 'XP', 'Tanggal Bergabung']
+        const headers = ['ID', 'Nama Lengkap', 'Username', 'Pangkat', 'XP', 'Streak', 'Tanggal Bergabung']
         const csvContent = [
             headers.join(','),
-            ...filteredProfiles.map(p => 
-                `${p.id},"${p.full_name || ''}","${p.username || ''}","${p.role}",${p.points || 0},"${new Date(p.created_at).toLocaleDateString('id-ID')}"`
+            ...filteredProfiles.map(p =>
+                `${p.id},"${p.full_name || ''}","${p.username || ''}","${p.role}",${p.points || 0},${p.streak || 0},"${new Date(p.created_at).toLocaleDateString('id-ID')}"`
             )
         ].join('\n')
 
@@ -120,7 +138,7 @@ export default function AdminUsersPage() {
             {/* ====== HEADER ====== */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-amber-300 border-4 border-slate-900 shadow-[8px_8px_0px_#0f172a] md:shadow-[12px_12px_0px_#0f172a] rounded-[2rem] md:rounded-[3rem] p-6 md:p-10 relative overflow-hidden mt-4">
                 <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'repeating-linear-gradient(45deg, #000 0, #000 2px, transparent 2px, transparent 10px)' }}></div>
-                
+
                 <div className="relative z-10">
                     <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight flex items-center gap-4">
                         <div className="bg-white p-3 rounded-2xl border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] transform -rotate-3 hover:rotate-6 transition-transform shrink-0">
@@ -192,8 +210,8 @@ export default function AdminUsersPage() {
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 bg-white p-4 rounded-3xl border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a]">
                 <div className="relative flex-1">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-6 w-6 text-slate-400" />
-                    <Input 
-                        placeholder="Cari nama atau username..." 
+                    <Input
+                        placeholder="Cari nama atau username..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="h-14 pl-12 bg-slate-50 border-2 border-slate-300 focus:border-slate-900 rounded-2xl font-bold text-base focus-visible:ring-0 focus:shadow-[4px_4px_0px_#0f172a] transition-all"
@@ -230,11 +248,11 @@ export default function AdminUsersPage() {
                         <div className="divide-y-4 divide-slate-900">
                             {filteredProfiles.map((profile) => {
                                 const level = Math.floor((profile.points || 0) / 100) + 1
-                                const isCurrentUser = profile.id === currentUser?.id
-                                
+                                const isCurrentUser = profile.id === currentUserId
+
                                 return (
                                     <div key={profile.id} className="flex flex-col lg:flex-row items-start lg:items-center justify-between p-6 md:p-8 bg-white hover:bg-slate-100 transition-colors gap-6 group cursor-default">
-                                        
+
                                         {/* Info User */}
                                         <div className="flex items-center gap-4 md:gap-6 w-full lg:w-auto">
                                             <Avatar className="h-14 w-14 md:h-16 md:w-16 border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] shrink-0 transform -rotate-2 group-hover:rotate-2 transition-transform bg-white">
@@ -243,7 +261,7 @@ export default function AdminUsersPage() {
                                                     {profile.full_name?.[0]?.toUpperCase() || '?'}
                                                 </AvatarFallback>
                                             </Avatar>
-                                            
+
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex items-center gap-3 flex-wrap mb-2">
                                                     <h3 className="font-black text-slate-900 text-xl md:text-2xl leading-tight truncate group-hover:text-violet-700 transition-colors">
@@ -255,29 +273,35 @@ export default function AdminUsersPage() {
                                                         </Badge>
                                                     )}
                                                 </div>
-                                                
+
                                                 <div className="text-xs md:text-sm font-bold text-slate-600 flex flex-wrap items-center gap-2">
-                                                    <span className="bg-slate-200 border-2 border-slate-900 px-2 py-0.5 rounded-md shadow-[2px_2px_0px_#0f172a]">@{profile.username || '-'}</span> 
-                                                    
+                                                    <span className="bg-slate-200 border-2 border-slate-900 px-2 py-0.5 rounded-md shadow-[2px_2px_0px_#0f172a]">@{profile.username || '-'}</span>
+
                                                     {profile.role === 'siswa' && (
                                                         <>
                                                             <span className="text-violet-900 bg-violet-300 border-2 border-slate-900 px-2.5 py-0.5 rounded-md shadow-[2px_2px_0px_#0f172a]">Level {level}</span>
                                                             <span className="text-emerald-900 bg-emerald-300 border-2 border-slate-900 px-2.5 py-0.5 rounded-md shadow-[2px_2px_0px_#0f172a]">{profile.points || 0} XP</span>
+                                                            {(profile.streak || 0) > 0 && (
+                                                                <span className="text-orange-900 bg-orange-200 border-2 border-slate-900 px-2.5 py-0.5 rounded-md shadow-[2px_2px_0px_#0f172a]">🔥 {profile.streak} hari</span>
+                                                            )}
                                                         </>
                                                     )}
                                                 </div>
                                             </div>
                                         </div>
 
-                                        {/* Action Area Khusus Mobile dan Desktop */}
+                                        {/* Action Area */}
                                         <div className="flex flex-row items-center justify-between w-full lg:w-auto mt-2 lg:mt-0 p-3 lg:p-0 bg-slate-50 lg:bg-transparent border-2 border-slate-900 lg:border-transparent rounded-xl lg:rounded-none shrink-0 shadow-inner lg:shadow-none">
                                             {getRoleBadge(profile.role)}
-                                            
+
+                                            {/* Tombol ganti role hanya tampil jika: caller adalah admin DAN bukan diri sendiri */}
                                             {isAdmin && !isCurrentUser && (
                                                 <div className="transform group-hover:-translate-y-1 transition-transform ml-4">
                                                     <AdminUserActions
                                                         userId={profile.id}
                                                         currentRole={profile.role}
+                                                        currentPoints={profile.points || 0}
+                                                        userName={profile.full_name || profile.username || 'Pengguna'}
                                                     />
                                                 </div>
                                             )}

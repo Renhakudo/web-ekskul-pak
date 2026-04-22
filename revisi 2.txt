@@ -1,0 +1,29 @@
+Lakukan analisis menyeluruh, detail, dan sistematis terhadap seluruh fitur pada halaman **`/admin/classes` dan semua halaman turunannya`**, lalu lanjutkan dengan refactor dan pengembangan core feature secara besar-besaran dengan pendekatan profesional. Sebelum implementasi, pahami secara penuh struktur database Supabase, relasi antar tabel (classes, materials, assignments, quizzes, users, memberships, dll), serta alur RBAC agar semua perubahan aman, tidak merusak histori, dan tidak menimbulkan konflik antar fitur.
+
+Mulai dengan membangun sistem **kategori/label kelas** yang fleksibel dan scalable, sehingga setiap kelas dapat dikelompokkan dengan rapi dan mudah difilter baik di sisi admin, guru, maupun siswa. Lanjutkan dengan sistem **kategori pada materi di dalam kelas**, sehingga materi tidak hanya berupa list panjang tetapi terstruktur berdasarkan topik atau level pembelajaran. Integrasikan perubahan ini ke seluruh tampilan (admin, guru, siswa) dengan UI yang konsisten dan intuitif. Sekalian tambahkan fitur **edit kelas (judul dan deskripsi)** dengan validasi yang aman tanpa merusak relasi data yang sudah ada.
+
+Selanjutnya, implementasikan sistem **kepemilikan dan akses guru dalam kelas**. Setiap kelas harus memiliki **guru utama (creator)** yang memiliki kontrol penuh terhadap kelas tersebut. Tambahkan sistem **akses multi-guru berbasis izin**, di mana guru lain hanya bisa mengakses atau mengedit kelas setelah diberikan akses oleh admin. Sistem ini harus mencakup pencatatan siapa pembuat kelas, siapa saja yang memiliki akses, serta pembagian hak akses yang jelas (edit materi, buat quiz, nilai tugas, dll). Pastikan semua ini tercatat rapi dan bisa ditampilkan di dashboard siswa (menampilkan siapa saja pengajar dalam kelas), termasuk pada aktivitas seperti penilaian tugas agar terlihat guru mana yang melakukan penilaian. Semua aktivitas ini juga harus siap terintegrasi dengan sistem log.
+
+Lakukan peningkatan besar pada fitur **pembuatan dan pengelolaan materi**. Ubah sistem menjadi **modular dan fleksibel**, di mana satu materi bisa terdiri dari kombinasi video (embed YouTube), teks (rich editor lengkap: heading, bold, italic, underline, list, dll), dan file/link eksternal. Pastikan materi bisa disusun dalam satu halaman yang rapi, bukan berbasis popup, dengan interface seperti editor blog (luas, nyaman, dan profesional). Tambahkan fitur preview, status draft/publish, dan struktur layout materi yang jelas agar pengalaman belajar lebih interaktif, namun tetap ringan dan tidak membebani database (semua media tetap berbasis link).
+
+Perbaiki fitur **quiz** agar benar-benar tersedia dan bisa diakses dari sisi siswa. Pastikan quiz muncul di dalam kelas yang diikuti, dapat dikerjakan dengan alur yang jelas, terhubung ke sistem nilai dan XP, serta tidak hanya muncul di admin. Pastikan tidak ada gap antara sisi admin/guru dan siswa.
+
+Hapus fitur absensi dari dalam kelas, dan pusatkan hanya di `/dashboard/absensi`. Kemudian bangun sistem absensi berbasis **kode dinamis** yang dapat di-generate oleh admin/guru, berlaku dalam waktu terbatas (misalnya 5 menit), dan harus diinput oleh siswa untuk melakukan presensi. Tambahkan fitur riwayat absensi lengkap dengan filter (per waktu, per siswa, per kelas) serta kemampuan export ke CSV/Excel.
+
+Perbaiki logika pada halaman `/dashboard/courses` dengan menambahkan sistem **“daftar kelas” (join system)**. Saat ini tab “Kelas Saya” kosong karena tidak ada relasi yang jelas. Implementasikan sistem di mana siswa harus mendaftar ke kelas untuk bisa mengakses materi, forum, dan quiz. Data keikutsertaan ini harus tersimpan (misalnya di tabel class_members) dan digunakan untuk menampilkan kelas pada tab “Kelas Saya”. Pastikan logika ini konsisten dan tidak error.
+
+Bangun sistem **progress belajar komprehensif**, yang mencatat:
+
+* progres per materi (dibuka/diselesaikan)
+* progres per kelas (persentase)
+* status penyelesaian kelas
+* integrasi dengan XP, streak, dan badge
+  Semua data harus tersimpan rapi dan bisa digunakan untuk analitik maupun monitoring.
+
+Pastikan seluruh fitur pada bagian kelas ini benar-benar berjalan sempurna dari semua sudut pandang role (admin, guru, siswa), baik dari sisi logic, UI/UX, maupun performa. Lakukan full review untuk memastikan tidak ada bug, inkonsistensi, atau potensi error ke depannya. Jika ada ambiguitas, ambil keputusan terbaik berdasarkan UX, skalabilitas, dan kestabilan sistem, lalu jelaskan reasoning-nya.
+
+Untuk halaman lain: lakukan review pada leaderboard untuk memastikan tidak ada potensi masalah. Pada halaman `/dashboard/profile`, lakukan perbaikan UI terutama pada spacing yang tidak proporsional, serta revisi total fitur **“bagikan kartu profil”** agar flow-nya lebih efisien: ketika tombol ditekan, langsung generate gambar siap share (bukan link dulu), dengan opsi share langsung dan tetap memungkinkan penyisipan link di caption. Pastikan tampilan mobile rapi dan konsisten.
+
+Terakhir, lakukan audit menyeluruh terhadap seluruh desain dan pengalaman pengguna: pastikan konsistensi layout, komponen, animasi, dan elemen UI di seluruh halaman. Terapkan **skeleton loading** di semua halaman, optimalkan untuk **mobile-first experience**, pastikan tidak ada elemen yang terpotong atau berantakan di layar kecil, dan jaga agar alur penggunaan tetap sederhana, intuitif, dan tidak melelahkan.
+
+Seluruh implementasi wajib berjalan end-to-end (UI, logic, backend, database Supabase) tanpa merusak sistem, fitur, atau histori data yang sudah ada.

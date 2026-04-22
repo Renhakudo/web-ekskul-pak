@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { logActivity } from './activity-logger'
 
 /**
  * Mengembalikan string tanggal hari ini dalam format 'YYYY-MM-DD'
@@ -6,7 +7,6 @@ import type { SupabaseClient } from '@supabase/supabase-js'
  */
 function getTodayLocalDate(): string {
     const today = new Date()
-    // Koreksi timezone agar tidak geser ke tanggal kemarin/besok saat UTC
     const offset = today.getTimezoneOffset()
     today.setMinutes(today.getMinutes() - offset)
     return today.toISOString().split('T')[0]
@@ -89,6 +89,20 @@ export async function updateLearningStreak(
             console.warn('[streak-utils] Gagal update streak:', updateError.message)
             return null
         }
+
+        // --- Catat ke activity_logs (fail silently) ---
+        await logActivity(supabase, {
+            userId,
+            eventType: 'streak_update',
+            eventCategory: 'gamification',
+            metadata: {
+                oldStreak: currentStreak,
+                newStreak,
+                isReset: lastActivityDate !== yesterday && lastActivityDate !== null,
+                lastActivityDate,
+                today,
+            },
+        })
 
         return newStreak
     } catch (err) {

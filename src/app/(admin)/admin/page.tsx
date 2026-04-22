@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
-import { Users, BookOpen, ClipboardCheck, Star, GraduationCap, Activity, ShieldAlert, Trophy, ArrowRight, PenTool, PlusCircle, UserPlus } from 'lucide-react'
+import { Users, BookOpen, ClipboardCheck, Star, GraduationCap, Activity, ShieldAlert, Trophy, ArrowRight, PenTool, PlusCircle, UserPlus, Radio } from 'lucide-react'
 import { AdminCharts } from '@/components/AdminCharts'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -154,7 +154,7 @@ export default async function AdminDashboardPage() {
       </div>
 
       {/* Tindakan Cepat (Quick Actions) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 pt-2">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 pt-2">
         <Link href="/admin/blog/new">
           <Button className="w-full h-16 bg-pink-400 hover:bg-pink-300 text-slate-900 font-black border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] active:shadow-none active:translate-y-1 hover:-translate-y-1 hover:shadow-[6px_6px_0px_#0f172a] transition-all rounded-[1.5rem] text-lg uppercase flex items-center justify-center gap-3">
             <PenTool className="h-6 w-6" /> Tulis Berita
@@ -168,6 +168,11 @@ export default async function AdminDashboardPage() {
         <Link href="/admin/users">
           <Button className="w-full h-16 bg-orange-400 hover:bg-orange-300 text-slate-900 font-black border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] active:shadow-none active:translate-y-1 hover:-translate-y-1 hover:shadow-[6px_6px_0px_#0f172a] transition-all rounded-[1.5rem] text-lg uppercase flex items-center justify-center gap-3">
             <UserPlus className="h-6 w-6" /> Kelola Akun
+          </Button>
+        </Link>
+        <Link href="/admin/activity">
+          <Button className="w-full h-16 bg-slate-900 hover:bg-slate-800 text-white font-black border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] active:shadow-none active:translate-y-1 hover:-translate-y-1 hover:shadow-[6px_6px_0px_#0f172a] transition-all rounded-[1.5rem] text-lg uppercase flex items-center justify-center gap-3">
+            <Radio className="h-6 w-6 text-yellow-400" /> Activity Log
           </Button>
         </Link>
       </div>
