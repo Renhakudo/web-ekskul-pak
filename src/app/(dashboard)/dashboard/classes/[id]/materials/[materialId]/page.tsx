@@ -62,16 +62,21 @@ export default function MaterialPlayerPage({
       const materialPromise = supabase.from('materials').select('*').eq('id', materialId).single()
       const playlistPromise = supabase.from('materials').select('id, title, module_name, type, file_url, xp_reward').eq('class_id', classId).order('created_at', { ascending: true })
       const logsPromise = supabase.from('points_logs').select('source').eq('user_id', user.id).ilike('source', 'material_%')
+      const progressPromise = supabase.from('material_progress').select('material_id').eq('user_id', user.id).eq('class_id', classId)
 
-      const [matRes, listRes, logsRes] = await Promise.all([materialPromise, playlistPromise, logsPromise])
+      const [matRes, listRes, logsRes, progRes] = await Promise.all([materialPromise, playlistPromise, logsPromise, progressPromise])
 
       if (matRes.data) setMaterial(matRes.data)
       if (listRes.data) setPlaylist(listRes.data)
 
+      const ids = new Set<string>()
       if (logsRes.data) {
-        const ids = new Set(logsRes.data.map((log: any) => log.source.replace('material_', '')))
-        setCompletedIds(ids)
+        logsRes.data.forEach((log: any) => ids.add(log.source.replace('material_', '')))
       }
+      if (progRes.data) {
+        progRes.data.forEach((prog: any) => ids.add(prog.material_id))
+      }
+      setCompletedIds(ids)
 
       setLoading(false)
     }
@@ -114,6 +119,13 @@ export default function MaterialPlayerPage({
       source: `material_${materialId}`,
       points: material.xp_reward || 50
     })
+
+    await supabase.from('material_progress').upsert({
+      user_id: user.id,
+      material_id: materialId,
+      class_id: classId,
+      completed: true
+    }, { onConflict: 'user_id,material_id' })
 
     if (error) {
       showToast('Gagal menyimpan data. Coba lagi.', 'error')
@@ -249,14 +261,29 @@ export default function MaterialPlayerPage({
                 </div>
 
                 {material.content ? (
-                  <div
-                    className="prose prose-slate prose-lg max-w-none text-slate-800 font-medium leading-relaxed
-                               prose-headings:font-black prose-headings:text-slate-900 prose-a:text-violet-600 prose-a:font-black
-                               prose-blockquote:border-l-4 prose-blockquote:border-slate-900 prose-blockquote:bg-slate-50 prose-blockquote:not-italic prose-blockquote:font-bold prose-blockquote:py-2 prose-blockquote:px-4 prose-blockquote:rounded-r-xl
-                               prose-code:text-pink-600 prose-code:bg-pink-50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:border-2 prose-code:border-pink-200
-                               prose-pre:bg-slate-900 prose-pre:text-slate-50 prose-pre:border-4 prose-pre:border-slate-900 prose-pre:shadow-[4px_4px_0px_#0f172a] prose-pre:rounded-xl"
-                    dangerouslySetInnerHTML={{ __html: material.content }}
-                  />
+                  <>
+                    <div
+                      className="prose prose-slate prose-lg max-w-none text-slate-800 font-medium leading-relaxed
+                                 prose-headings:font-black prose-headings:text-slate-900 prose-a:text-violet-600 prose-a:font-black
+                                 prose-blockquote:border-l-4 prose-blockquote:border-slate-900 prose-blockquote:bg-slate-50 prose-blockquote:not-italic prose-blockquote:font-bold prose-blockquote:py-2 prose-blockquote:px-4 prose-blockquote:rounded-r-xl
+                                 prose-code:text-pink-600 prose-code:bg-pink-50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:border-2 prose-code:border-pink-200
+                                 prose-pre:bg-slate-900 prose-pre:text-slate-50 prose-pre:border-4 prose-pre:border-slate-900 prose-pre:shadow-[4px_4px_0px_#0f172a] prose-pre:rounded-xl
+                                 prose-img:rounded-xl prose-img:border-4 prose-img:border-slate-900 prose-img:shadow-[8px_8px_0px_#0f172a] prose-img:my-8"
+                      dangerouslySetInnerHTML={{ __html: material.content }}
+                    />
+                    <style dangerouslySetInnerHTML={{__html: `
+                        div[data-youtube-video] {
+                            margin: 2rem 0;
+                        }
+                        div[data-youtube-video] iframe {
+                            width: 100%;
+                            aspect-ratio: 16 / 9;
+                            border-radius: 0.75rem;
+                            border: 4px solid #0f172a;
+                            box-shadow: 8px 8px 0 #0f172a;
+                        }
+                    `}} />
+                  </>
                 ) : (
                   <div className="text-slate-500 font-bold text-lg text-center py-8">
                     {material.type === 'video' ? 'Tonton sinyal rekaman dengan hikmat.' : material.type === 'file' ? 'Gunakan tombol di atas untuk membuka dokumen.' : 'Naskah ini kosong.'}

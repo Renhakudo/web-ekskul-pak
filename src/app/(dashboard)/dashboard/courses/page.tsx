@@ -6,84 +6,110 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { BookOpen, ArrowRight, Search, Loader2, GraduationCap, Map, CheckCircle2 } from "lucide-react"
+import { BookOpen, ArrowRight, Search, Loader2, GraduationCap, Map, CheckCircle2, UserPlus, UserMinus, Tag } from "lucide-react"
 import Link from "next/link"
+import { Skeleton } from "@/components/ui/skeleton"
+import { toast } from "sonner"
 
 interface ClassItem {
   id: string;
   title: string;
   description: string;
   created_at: string;
-  materials: any; // Bisa object atau array dari supabase
+  category?: string;
+  materials: any;
 }
 
 export default function MyCoursesPage() {
   const supabase = createClient()
   const [loading, setLoading] = useState(true)
+  const [joiningId, setJoiningId] = useState<string | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   
-  // State Data Master
   const [allPublicClasses, setAllPublicClasses] = useState<ClassItem[]>([])
-  const [myClassIds, setMyClassIds] = useState<string[]>([]) // Menyimpan ID kelas yang diikuti
+  const [myClassIds, setMyClassIds] = useState<string[]>([])
+  const [categories, setCategories] = useState<any[]>([])
 
-  // State UI
   const [search, setSearch] = useState('')
   const [activeTab, setActiveTab] = useState<'my' | 'all'>('my')
+  const [filterCategory, setFilterCategory] = useState('Semua')
 
   useEffect(() => {
     const fetchClasses = async () => {
       setLoading(true)
-
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { setLoading(false); return }
+      setCurrentUserId(user.id)
 
-      // Tarik semua kelas (All Courses) dan data membership user secara paralel
-      const [allClassesRes, myMembershipsRes] = await Promise.all([
-        supabase
-          .from('classes')
-          .select('id, title, description, created_at, materials(count)')
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('class_members')
-          .select('class_id') // Hanya butuh ID kelasnya saja untuk memastikan dia join
-          .eq('user_id', user.id)
+      const [allClassesRes, myMembershipsRes, catRes] = await Promise.all([
+        supabase.from('classes').select('id, title, description, created_at, category, materials(count)').order('created_at', { ascending: false }),
+        supabase.from('class_members').select('class_id').eq('user_id', user.id),
+        supabase.from('class_categories').select('*').order('name')
       ])
 
-      // Simpan semua kelas yang ada di database
-      const fetchedClasses = allClassesRes.data || []
-      setAllPublicClasses(fetchedClasses)
-
-      // Simpan kumpulan ID kelas yang diikuti (Aman untuk status Aktif / Completed)
+      setAllPublicClasses(allClassesRes.data || [])
+      setCategories(catRes.data || [])
       const joinedIds = (myMembershipsRes.data || []).map((m: any) => m.class_id)
       setMyClassIds(joinedIds)
-
-      // Jika user belum punya kelas, otomatis arahkan tab ke "Semua Kelas"
-      if (joinedIds.length === 0) {
-        setActiveTab('all')
-      }
-
+      if (joinedIds.length === 0) setActiveTab('all')
       setLoading(false)
     }
     
     fetchClasses()
+
+    const channel = supabase
+      .channel('public:dashboard_courses')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'classes' }, () => fetchClasses())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'class_categories' }, () => fetchClasses())
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [])
 
-  // --- LOGIKA FILTERING ---
-  // 1. Tentukan sumber data berdasarkan Tab
+  const handleJoin = async (classId: string, e: React.MouseEvent) => {
+    e.preventDefault(); e.stopPropagation()
+    if (!currentUserId) return
+    setJoiningId(classId)
+    const { error } = await supabase.from('class_members').insert({ class_id: classId, user_id: currentUserId })
+    if (error) {
+      toast.error('Gagal mendaftar: ' + error.message)
+    } else {
+      setMyClassIds(prev => [...prev, classId])
+      toast.success('Berhasil bergabung ke kelas! 🎉')
+    }
+    setJoiningId(null)
+  }
+
+  const handleLeave = async (classId: string, e: React.MouseEvent) => {
+    e.preventDefault(); e.stopPropagation()
+    if (!currentUserId) return
+    setJoiningId(classId)
+    const { error } = await supabase.from('class_members').delete().eq('class_id', classId).eq('user_id', currentUserId)
+    if (error) {
+      toast.error('Gagal keluar kelas: ' + error.message)
+    } else {
+      setMyClassIds(prev => prev.filter(id => id !== classId))
+      toast.success('Kamu keluar dari kelas.')
+    }
+    setJoiningId(null)
+  }
+
   const sourceClasses = activeTab === 'my' 
-    ? allPublicClasses.filter(c => myClassIds.includes(c.id)) // Ambil kelas yg ID-nya ada di daftar membership
-    : allPublicClasses // Ambil semua
+    ? allPublicClasses.filter(c => myClassIds.includes(c.id))
+    : allPublicClasses
 
-  // 2. Filter berdasarkan kata kunci pencarian
-  const filteredClasses = sourceClasses.filter(c =>
-    c?.title?.toLowerCase().includes(search.toLowerCase()) ||
-    c?.description?.toLowerCase().includes(search.toLowerCase())
-  )
+  const filteredClasses = sourceClasses.filter(c => {
+    const matchSearch = (c?.title || '').toLowerCase().includes(search.toLowerCase()) || (c?.description || '').toLowerCase().includes(search.toLowerCase())
+    const matchCat = filterCategory === 'Semua' || c?.category === filterCategory
+    return matchSearch && matchCat
+  })
 
-  // --- RENDER LOADER ---
   if (loading) return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[#FDFBF7]">
-      <Loader2 className="animate-spin h-14 w-14 text-emerald-500 mb-4" />
-      <p className="font-black text-slate-500 uppercase tracking-widest">Menggelar Peta...</p>
+    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 mt-4">
+      <Skeleton className="h-36 w-full rounded-[2rem] border-4 border-slate-200" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-64 rounded-[2rem] border-4 border-slate-200" />)}
+      </div>
     </div>
   )
 
@@ -155,7 +181,32 @@ export default function MyCoursesPage() {
           </div>
         </div>
 
-        {/* ====== DAFTAR KELAS ====== */}
+        {/* ====== FILTER KATEGORI ====== */}
+        <div className="flex gap-2 flex-nowrap overflow-x-auto pb-3 pt-1 hide-scrollbar scroll-smooth">
+          <button
+            onClick={() => setFilterCategory('Semua')}
+            className={`px-4 py-2 rounded-xl font-black text-xs border-2 border-slate-900 uppercase tracking-wider transition-all whitespace-nowrap ${
+              filterCategory === 'Semua'
+                ? 'bg-slate-900 text-white shadow-none'
+                : 'bg-white text-slate-600 shadow-[3px_3px_0px_#0f172a] hover:-translate-y-0.5'
+            }`}
+          >Semua</button>
+          {categories.map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => setFilterCategory(cat.name)}
+              className={`px-4 py-2 rounded-xl font-black text-xs border-2 border-slate-900 uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-2 ${
+                filterCategory === cat.name
+                  ? `${cat.color} text-slate-900 shadow-none`
+                  : 'bg-white text-slate-600 shadow-[3px_3px_0px_#0f172a] hover:-translate-y-0.5'
+              }`}
+            >
+              <div className={`w-2.5 h-2.5 rounded-full border border-slate-900 ${cat.color}`}></div>
+              {cat.name}
+            </button>
+          ))}
+        </div>
+
         {filteredClasses.length === 0 ? (
           <div className="text-center py-20 md:py-32 border-4 border-dashed border-slate-400 rounded-[2rem] md:rounded-[3rem] bg-white/50 relative overflow-hidden px-4">
             <div className="w-20 h-20 md:w-24 md:h-24 bg-slate-200 rounded-3xl flex items-center justify-center mx-auto mb-6 border-4 border-slate-400 transform -rotate-6 shadow-inner">
@@ -188,19 +239,23 @@ export default function MyCoursesPage() {
 
               // Rotasi selang seling untuk efek neobrutalism yang organik
               const rotClass = idx % 2 === 0 ? 'hover:-rotate-2' : 'hover:rotate-2'
-              const barColors = ['bg-yellow-400', 'bg-pink-400', 'bg-blue-400', 'bg-emerald-400', 'bg-violet-400']
-              const randomBarColor = barColors[idx % barColors.length]
+              const catColor = categories.find(c => c.name === kelas.category)?.color || 'bg-slate-400'
 
               return (
-                <Link key={kelas.id} href={`/dashboard/classes/${kelas.id}`} className="block group">
+                <div key={kelas.id} className="block group">
                   <Card className={`h-full flex flex-col border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a] md:shadow-[8px_8px_0px_#0f172a] rounded-[1.5rem] md:rounded-[2rem] bg-white overflow-hidden hover:-translate-y-2 md:hover:-translate-y-3 hover:shadow-[10px_10px_0px_#0f172a] md:hover:shadow-[12px_12px_0px_#0f172a] transition-all duration-300 ${rotClass}`}>
                     
                     {/* Top Color Bar */}
-                    <div className={`h-6 md:h-8 w-full ${randomBarColor} border-b-4 border-slate-900 flex items-center px-4 justify-end`}>
+                    <div className={`h-6 md:h-8 w-full ${catColor} border-b-4 border-slate-900 flex items-center px-4 justify-between transition-colors`}>
                       <div className="flex gap-1.5">
                         <div className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-white/60 border-2 border-slate-900"></div>
                         <div className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-white/60 border-2 border-slate-900"></div>
                       </div>
+                      {kelas.category && (
+                        <span className={`text-[8px] md:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border-2 border-slate-900 shadow-sm ${catColor} text-slate-900`}>
+                          {kelas.category}
+                        </span>
+                      )}
                     </div>
                     
                     <CardHeader className="p-6 md:p-8 pb-2 md:pb-4">
@@ -231,13 +286,34 @@ export default function MyCoursesPage() {
                     </CardHeader>
                     
                     <CardContent className="mt-auto p-6 md:p-8 pt-4 md:pt-6 border-t-2 border-slate-100">
-                      <Button className={`w-full bg-slate-900 hover:bg-slate-800 text-white font-black border-4 border-transparent shadow-[4px_4px_0px_#cbd5e1] group-hover:shadow-none group-hover:translate-y-[4px] group-hover:translate-x-[4px] transition-all rounded-xl md:rounded-2xl h-12 md:h-14 text-sm md:text-base uppercase tracking-wider flex items-center justify-between px-5 md:px-6`}>
-                        {isJoined ? 'Lanjut Belajar' : 'Intip Misi'}
-                        <ArrowRight className="h-5 w-5 md:h-6 md:w-6 transform group-hover:translate-x-1 transition-transform text-emerald-400" />
-                      </Button>
+                      {isJoined ? (
+                        <div className="flex gap-3">
+                          <Link href={`/dashboard/classes/${kelas.id}`} className="flex-1">
+                            <Button className="w-full bg-slate-900 hover:bg-slate-800 text-white font-black border-4 border-transparent shadow-[4px_4px_0px_#cbd5e1] group-hover:shadow-none group-hover:translate-y-[4px] group-hover:translate-x-[4px] transition-all rounded-xl md:rounded-2xl h-12 md:h-14 text-sm uppercase tracking-wider flex items-center justify-center gap-2">
+                              Belajar <ArrowRight className="h-5 w-5" />
+                            </Button>
+                          </Link>
+                          <Button
+                            onClick={(e) => handleLeave(kelas.id, e)}
+                            disabled={joiningId === kelas.id}
+                            className="h-12 md:h-14 px-3 bg-red-100 hover:bg-red-400 text-red-700 hover:text-white font-black border-2 border-slate-900 rounded-xl md:rounded-2xl transition-all shrink-0"
+                            title="Keluar kelas"
+                          >
+                            {joiningId === kelas.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserMinus className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          onClick={(e) => handleJoin(kelas.id, e)}
+                          disabled={joiningId === kelas.id}
+                          className="w-full bg-emerald-400 hover:bg-emerald-300 text-slate-900 font-black border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] group-hover:shadow-none group-hover:translate-y-[4px] group-hover:translate-x-[4px] transition-all rounded-xl md:rounded-2xl h-12 md:h-14 text-sm uppercase tracking-wider flex items-center justify-center gap-2"
+                        >
+                          {joiningId === kelas.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <><UserPlus className="h-5 w-5" /> Daftar Kelas</>}
+                        </Button>
+                      )}
                     </CardContent>
                   </Card>
-                </Link>
+                </div>
               )
             })}
           </div>

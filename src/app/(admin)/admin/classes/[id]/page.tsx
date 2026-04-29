@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
+import { useState, useEffect, use, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import dynamic from 'next/dynamic' // <-- IMPORT INI UNTUK MEMPERBAIKI ERROR
+import dynamic from 'next/dynamic'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft, Plus, FileText, Video, Trash2, Loader2, Briefcase, Calendar, Pencil, HelpCircle, Clock, Save, X, Trophy, AlertTriangle, ArrowRight } from 'lucide-react'
+import { ArrowLeft, Plus, FileText, Video, Trash2, Loader2, Briefcase, Calendar, Pencil, HelpCircle, Clock, Save, X, Trophy, AlertTriangle, ArrowRight, Fingerprint, RefreshCw, Copy, CheckCircle2, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 
@@ -24,7 +24,7 @@ const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
   loading: () => <div className="min-h-[150px] w-full bg-slate-100 border-4 border-slate-900 border-dashed rounded-xl animate-pulse flex items-center justify-center font-black text-slate-400">Memuat Editor...</div>
 })
 
-interface Material { id: string; title: string; type: 'video' | 'text' | 'quiz' | 'file'; content?: string; youtube_url?: string; xp_reward: number; }
+interface Material { id: string; title: string; type: 'video' | 'text' | 'quiz' | 'file'; content?: string; youtube_url?: string; xp_reward: number; module_name?: string; }
 interface Assignment { id: string; title: string; description: string; due_date: string; }
 
 export default function ClassAdminPage({ params }: { params: Promise<{ id: string }> }) {
@@ -38,27 +38,34 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
   const [materials, setMaterials] = useState<Material[]>([])
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [quizzes, setQuizzes] = useState<any[]>([])
+  const [classTeachers, setClassTeachers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   const [isMatOpen, setIsMatOpen] = useState(false)
   const [isAssOpen, setIsAssOpen] = useState(false)
   const [isQuizOpen, setIsQuizOpen] = useState(false)
+  const [isTeacherOpen, setIsTeacherOpen] = useState(false)
+
+  const [teacherUsername, setTeacherUsername] = useState('')
+  const [teacherRole, setTeacherRole] = useState('co_teacher')
 
   const [qzTitle, setQzTitle] = useState('')
   const [qzTimeLimit, setQzTimeLimit] = useState(600)
   const [qzXP, setQzXP] = useState(100)
 
-  const [editingMaterial, setEditingMaterial] = useState<Material | null>(null)
   const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-
-  const [mTitle, setMTitle] = useState('')
-  const [mType, setMType] = useState('text')
-  const [mContent, setMContent] = useState('')
 
   const [aTitle, setATitle] = useState('')
   const [aDesc, setADesc] = useState('')
   const [aDueDate, setADueDate] = useState('')
+
+  // Attendance code generation
+  const [sessionCode, setSessionCode] = useState('')
+  const [sessionExpiry, setSessionExpiry] = useState('')
+  const [isGeneratingCode, setIsGeneratingCode] = useState(false)
+  const [existingSession, setExistingSession] = useState<any>(null)
+  const [sessionDuration, setSessionDuration] = useState(5)
 
   const [deleteTarget, setDeleteTarget] = useState<{table: string, id: string} | null>(null)
 
@@ -80,25 +87,13 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
       .order('created_at')
     if (qzData) setQuizzes(qzData)
 
+    const { data: ctData } = await supabase.from('class_teachers').select('*, profiles:user_id(*)').eq('class_id', id)
+    if (ctData) setClassTeachers(ctData)
+
     setLoading(false)
   }
 
   useEffect(() => { fetchData() }, [id])
-
-  const handleAddMaterial = async (e: React.FormEvent) => {
-    e.preventDefault(); setIsSubmitting(true)
-    const payload: any = { class_id: id, title: mTitle, type: mType, xp_reward: 50 }
-    if (mType === 'video') payload.youtube_url = mContent; else payload.content = mContent;
-
-    const { error } = await supabase.from('materials').insert(payload)
-    if (!error) { 
-        toast.success('Materi berhasil ditambahkan! 📚')
-        setIsMatOpen(false); resetForms(); fetchData() 
-    } else {
-        toast.error('Gagal tambah materi: ' + error.message)
-    }
-    setIsSubmitting(false)
-  }
 
   const handleAddAssignment = async (e: React.FormEvent) => {
     e.preventDefault(); setIsSubmitting(true)
@@ -110,29 +105,6 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
         setIsAssOpen(false); resetForms(); fetchData() 
     } else {
         toast.error('Gagal tambah tugas: ' + error.message)
-    }
-    setIsSubmitting(false)
-  }
-
-  const openEditMaterial = (m: Material) => {
-    setEditingMaterial(m)
-    setMTitle(m.title)
-    setMType(m.type)
-    setMContent(m.type === 'video' ? m.youtube_url || '' : m.content || '')
-  }
-
-  const handleUpdateMaterial = async (e: React.FormEvent) => {
-    e.preventDefault(); setIsSubmitting(true)
-    const payload: any = { title: mTitle, type: mType }
-    if (mType === 'video') { payload.youtube_url = mContent; payload.content = null }
-    else { payload.content = mContent; payload.youtube_url = null }
-
-    const { error } = await supabase.from('materials').update(payload).eq('id', editingMaterial?.id)
-    if (!error) { 
-        toast.success('Materi berhasil diperbarui! ✨')
-        setEditingMaterial(null); resetForms(); fetchData() 
-    } else {
-        toast.error('Gagal perbarui materi: ' + error.message)
     }
     setIsSubmitting(false)
   }
@@ -190,8 +162,72 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
     setIsSubmitting(false)
   }
 
+  const generateAttendanceCode = async () => {
+    setIsGeneratingCode(true)
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase()
+    const expiresAt = new Date(Date.now() + sessionDuration * 60 * 1000).toISOString()
+    const today = new Date().toISOString().split('T')[0]
+    const { data: { user } } = await supabase.auth.getUser()
+
+    const { data, error } = await supabase.from('class_sessions')
+      .insert({ class_id: id, session_date: today, unique_code: code, expires_at: expiresAt, created_by: user?.id })
+      .select().single()
+
+    if (error) {
+      toast.error('Gagal generate kode: ' + error.message)
+    } else {
+      setSessionCode(code)
+      setSessionExpiry(expiresAt)
+      setExistingSession(data)
+      toast.success(`Kode absensi "${code}" berhasil dibuat! Berlaku ${sessionDuration} menit.`)
+    }
+    setIsGeneratingCode(false)
+  }
+
+  const fetchExistingSession = useCallback(async () => {
+    const today = new Date().toISOString().split('T')[0]
+    const { data } = await supabase.from('class_sessions').select('*').eq('class_id', id).eq('session_date', today).order('created_at', { ascending: false }).limit(1).single()
+    if (data) {
+      setExistingSession(data)
+      setSessionCode(data.unique_code)
+      setSessionExpiry(data.expires_at)
+    }
+  }, [id])
+
+  useEffect(() => { fetchExistingSession() }, [fetchExistingSession])
+
+  const handleAddTeacher = async (e: React.FormEvent) => {
+    e.preventDefault(); setIsSubmitting(true)
+    const { data: targetUser } = await supabase.from('profiles').select('id, role').eq('username', teacherUsername).single()
+    if (!targetUser) {
+        toast.error('Pengajar dengan username tersebut tidak ditemukan!')
+        setIsSubmitting(false)
+        return
+    }
+    if (targetUser.role !== 'guru' && targetUser.role !== 'admin') {
+        toast.error('Pengguna tersebut bukan seorang guru!')
+        setIsSubmitting(false)
+        return
+    }
+
+    const { data: { user } } = await supabase.auth.getUser()
+    const { error } = await supabase.from('class_teachers').insert({
+        class_id: id,
+        user_id: targetUser.id,
+        role: teacherRole,
+        granted_by: user?.id
+    })
+    
+    if (!error) {
+        toast.success('Pengajar berhasil ditambahkan!')
+        setIsTeacherOpen(false); setTeacherUsername(''); fetchData()
+    } else {
+        toast.error('Gagal menambahkan pengajar: ' + error.message)
+    }
+    setIsSubmitting(false)
+  }
+
   const resetForms = () => {
-    setMTitle(''); setMType('text'); setMContent('');
     setATitle(''); setADesc(''); setADueDate('');
   }
 
@@ -250,52 +286,31 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
           >
             <HelpCircle className="w-6 h-6" /> Ujian
           </TabsTrigger>
+
+          <TabsTrigger 
+            value="attendance"
+            className="flex-1 w-full py-4 font-black text-base md:text-lg uppercase rounded-[1.5rem] transition-all border-4 border-slate-900 bg-white text-slate-500 shadow-[4px_4px_0px_#0f172a] data-[state=inactive]:hover:-translate-y-1 data-[state=inactive]:hover:shadow-[6px_6px_0px_#0f172a] data-[state=active]:translate-y-[4px] data-[state=active]:translate-x-[4px] data-[state=active]:shadow-none data-[state=active]:bg-cyan-400 data-[state=active]:text-slate-900 flex items-center justify-center gap-2 outline-none"
+          >
+            <Fingerprint className="w-6 h-6" /> Absensi
+          </TabsTrigger>
+
+          <TabsTrigger 
+            value="teachers"
+            className="flex-1 w-full py-4 font-black text-base md:text-lg uppercase rounded-[1.5rem] transition-all border-4 border-slate-900 bg-white text-slate-500 shadow-[4px_4px_0px_#0f172a] data-[state=inactive]:hover:-translate-y-1 data-[state=inactive]:hover:shadow-[6px_6px_0px_#0f172a] data-[state=active]:translate-y-[4px] data-[state=active]:translate-x-[4px] data-[state=active]:shadow-none data-[state=active]:bg-amber-400 data-[state=active]:text-slate-900 flex items-center justify-center gap-2 outline-none"
+          >
+            <Users className="w-6 h-6" /> Pengajar
+          </TabsTrigger>
         </TabsList>
 
         {/* ==================== TAB 1: MATERI ==================== */}
         <TabsContent value="materials" className="space-y-6 focus:outline-none">
           <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-violet-100 p-6 md:p-8 rounded-[2rem] border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a]">
             <h3 className="text-2xl md:text-3xl font-black text-slate-900 uppercase">Perbendaharaan Materi</h3>
-
-            <Dialog open={isMatOpen} onOpenChange={setIsMatOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-violet-500 hover:bg-violet-400 text-slate-900 h-14 px-6 text-base font-black border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] active:shadow-none active:translate-y-1 hover:-translate-y-1 hover:shadow-[6px_6px_0px_#0f172a] transition-all rounded-[1.5rem] uppercase tracking-wider">
-                  <Plus className="mr-2 h-6 w-6" /> Suntik Materi
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="border-4 border-slate-900 shadow-[12px_12px_0px_#0f172a] rounded-[2rem] bg-[#FDFBF7] p-6 sm:p-8 max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader><DialogTitle className="font-black text-3xl uppercase text-slate-900">Arsip Baru</DialogTitle></DialogHeader>
-                <form onSubmit={handleAddMaterial} className="space-y-6 mt-4">
-                  <div className="space-y-2">
-                    <Label className="font-black uppercase text-xs text-slate-800">Subjek Modul</Label>
-                    <Input className="h-14 border-4 border-slate-900 font-bold text-lg rounded-xl focus-visible:ring-0 focus:shadow-[4px_4px_0px_#0f172a] transition-shadow bg-white" value={mTitle} onChange={e => setMTitle(e.target.value)} required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="font-black uppercase text-xs text-slate-800">Tipe Informasi</Label>
-                    <Select value={mType} onValueChange={setMType}>
-                      <SelectTrigger className="h-14 border-4 border-slate-900 font-bold text-lg rounded-xl focus:ring-0 focus:shadow-[4px_4px_0px_#0f172a] bg-white"><SelectValue /></SelectTrigger>
-                      <SelectContent className="border-4 border-slate-900 rounded-xl shadow-[4px_4px_0px_#0f172a]">
-                        <SelectItem value="text" className="font-bold text-base py-3 cursor-pointer">Teks Laporan</SelectItem>
-                        <SelectItem value="video" className="font-bold text-base py-3 cursor-pointer">Sinyal Video</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="font-black uppercase text-xs text-slate-800">{mType === 'video' ? 'Tautan YouTube' : 'Isi Data'}</Label>
-                    {mType === 'video' ? (
-                        <Input className="h-14 border-4 border-slate-900 font-bold text-base rounded-xl focus-visible:ring-0 focus:shadow-[4px_4px_0px_#0f172a] bg-white" value={mContent} onChange={e => setMContent(e.target.value)} placeholder="https://youtube.com/..." required />
-                    ) : (
-                        <div className="border-4 border-slate-900 rounded-2xl overflow-hidden bg-white focus-within:shadow-[4px_4px_0px_#0f172a] transition-shadow">
-                          <RichTextEditor value={mContent} onChange={setMContent} placeholder="Tuliskan pengetahuan rahasia di sini..." />
-                        </div>
-                    )}
-                  </div>
-                  <Button type="submit" className="w-full h-16 bg-violet-500 hover:bg-violet-400 font-black text-xl text-slate-900 border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a] active:shadow-none active:translate-y-1 rounded-2xl uppercase tracking-wider transition-all" disabled={isSubmitting}>
-                    {isSubmitting ? <Loader2 className="animate-spin w-6 h-6" /> : 'Suntik Data'}
-                  </Button>
-                </form>
-              </DialogContent>
-            </Dialog>
+            <Link href={`/admin/classes/${id}/materials/create`}>
+              <Button className="bg-violet-500 hover:bg-violet-400 text-slate-900 h-14 px-6 text-base font-black border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] active:shadow-none active:translate-y-1 hover:-translate-y-1 hover:shadow-[6px_6px_0px_#0f172a] transition-all rounded-[1.5rem] uppercase tracking-wider">
+                <Plus className="mr-2 h-6 w-6" /> Suntik Materi
+              </Button>
+            </Link>
           </div>
 
           <div className="grid gap-6">
@@ -321,7 +336,9 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
                     </Badge>
                   </div>
                   <div className="flex gap-3 w-full md:w-auto justify-end shrink-0">
-                    <Button variant="ghost" className="h-12 w-12 p-0 text-slate-600 bg-yellow-100 hover:bg-yellow-300 hover:text-slate-900 border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] rounded-xl hover:-translate-y-1 transition-all" onClick={() => openEditMaterial(m)}><Pencil className="h-5 w-5" /></Button>
+                    <Link href={`/admin/classes/${id}/materials/${m.id}/edit`}>
+                      <Button variant="ghost" className="h-12 w-12 p-0 text-slate-600 bg-yellow-100 hover:bg-yellow-300 hover:text-slate-900 border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] rounded-xl hover:-translate-y-1 transition-all"><Pencil className="h-5 w-5" /></Button>
+                    </Link>
                     <Button variant="ghost" className="h-12 w-12 p-0 text-slate-600 bg-red-100 hover:bg-red-400 hover:text-white border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] rounded-xl hover:-translate-y-1 transition-all" onClick={() => handleDelete('materials', m.id)}><Trash2 className="h-5 w-5" /></Button>
                   </div>
                 </CardContent>
@@ -329,31 +346,7 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
             ))}
           </div>
 
-          <Dialog open={!!editingMaterial} onOpenChange={(open) => !open && setEditingMaterial(null)}>
-            <DialogContent className="border-4 border-slate-900 shadow-[12px_12px_0px_#0f172a] rounded-[2rem] bg-[#FDFBF7] p-6 sm:p-8 max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader><DialogTitle className="font-black text-3xl uppercase text-slate-900 flex items-center gap-3"><Pencil className="w-6 h-6 text-yellow-500" /> Rombak Arsip</DialogTitle></DialogHeader>
-              <form onSubmit={handleUpdateMaterial} className="space-y-6 mt-4">
-                <div className="space-y-2"><Label className="font-black uppercase text-xs">Judul Baru</Label><Input className="h-14 border-4 border-slate-900 font-bold text-lg rounded-xl focus-visible:ring-0 focus:shadow-[4px_4px_0px_#0f172a] transition-shadow bg-white" value={mTitle} onChange={e => setMTitle(e.target.value)} required /></div>
-                <div className="space-y-2"><Label className="font-black uppercase text-xs">Tipe Informasi</Label>
-                  <Select value={mType} onValueChange={setMType}>
-                    <SelectTrigger className="h-14 border-4 border-slate-900 font-bold text-lg rounded-xl bg-white"><SelectValue /></SelectTrigger>
-                    <SelectContent className="border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] rounded-xl"><SelectItem value="text" className="font-bold py-3 text-base">Teks</SelectItem><SelectItem value="video" className="font-bold py-3 text-base">Video</SelectItem></SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                    <Label className="font-black uppercase text-xs">{mType === 'video' ? 'Tautan YouTube' : 'Isi Data'}</Label>
-                    {mType === 'video' ? (
-                        <Input className="h-14 border-4 border-slate-900 font-bold text-base rounded-xl focus-visible:ring-0 focus:shadow-[4px_4px_0px_#0f172a] transition-shadow bg-white" value={mContent} onChange={e => setMContent(e.target.value)} placeholder="https://youtube.com/..." required />
-                    ) : (
-                        <div className="border-4 border-slate-900 rounded-2xl overflow-hidden bg-white focus-within:shadow-[4px_4px_0px_#0f172a] transition-shadow">
-                           <RichTextEditor value={mContent} onChange={setMContent} placeholder="Tuliskan pengetahuan rahasia di sini..." />
-                        </div>
-                    )}
-                </div>
-                <Button type="submit" className="w-full h-16 bg-yellow-400 hover:bg-yellow-300 text-slate-900 font-black text-xl border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a] active:shadow-none active:translate-y-1 rounded-2xl uppercase tracking-wider transition-all" disabled={isSubmitting}><Save className="mr-2 h-6 w-6" /> Simpan Revisi</Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+
         </TabsContent>
 
         {/* ==================== TAB 2: TUGAS ==================== */}
@@ -524,6 +517,139 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
                   </Card>
                 )
               })}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ==================== TAB 4: ABSENSI ==================== */}
+        <TabsContent value="attendance" className="space-y-6 focus:outline-none">
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-cyan-100 p-6 md:p-8 rounded-[2rem] border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a]">
+            <div>
+              <h3 className="text-2xl md:text-3xl font-black text-slate-900 uppercase">Kode Absensi Kelas</h3>
+              <p className="text-slate-600 font-bold text-sm mt-1">Generate kode sekali pakai yang dapat diinput siswa untuk absen.</p>
+            </div>
+          </div>
+
+          <div className="max-w-md mx-auto">
+            <div className="bg-white border-4 border-slate-900 shadow-[8px_8px_0px_#0f172a] rounded-[2rem] p-8 flex flex-col items-center gap-6">
+              {sessionCode && new Date(sessionExpiry) > new Date() ? (
+                <>
+                  <div className="text-center">
+                    <p className="text-sm font-black text-slate-500 uppercase tracking-widest mb-3">Kode Aktif Hari Ini</p>
+                    <div className="text-6xl font-black text-slate-900 tracking-widest bg-cyan-200 border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a] px-8 py-4 rounded-2xl">
+                      {sessionCode}
+                    </div>
+                    <p className="text-sm font-bold text-slate-500 mt-3">
+                      Berakhir: {new Date(sessionExpiry).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => { navigator.clipboard.writeText(sessionCode); toast.success('Kode disalin!') }}
+                    className="w-full h-14 bg-slate-900 hover:bg-slate-800 text-cyan-400 font-black border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] active:shadow-none active:translate-y-1 rounded-2xl uppercase tracking-wider transition-all"
+                  >
+                    <Copy className="h-5 w-5 mr-2" /> Salin Kode
+                  </Button>
+                </>
+              ) : (
+                <div className="text-center">
+                  <div className="w-24 h-24 bg-slate-100 border-4 border-slate-900 rounded-full flex items-center justify-center mx-auto mb-4 shadow-[4px_4px_0px_#0f172a]">
+                    <Fingerprint className="h-12 w-12 text-slate-400" />
+                  </div>
+                  <p className="font-black text-xl text-slate-500 uppercase">Belum ada kode hari ini</p>
+                </div>
+              )}
+
+              <div className="w-full border-t-4 border-slate-200 pt-6 space-y-4">
+                <div className="space-y-2">
+                  <Label className="font-black text-xs uppercase">Durasi Berlaku (menit)</Label>
+                  <Select value={String(sessionDuration)} onValueChange={(v) => setSessionDuration(Number(v))}>
+                    <SelectTrigger className="h-12 border-4 border-slate-900 font-bold rounded-xl bg-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-4 border-slate-900 rounded-xl">
+                      {[5, 10, 15, 30].map(d => (
+                        <SelectItem key={d} value={String(d)} className="font-bold py-2">{d} Menit</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  onClick={generateAttendanceCode}
+                  disabled={isGeneratingCode}
+                  className="w-full h-14 bg-cyan-400 hover:bg-cyan-300 text-slate-900 font-black border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] active:shadow-none active:translate-y-1 rounded-2xl uppercase tracking-wider transition-all"
+                >
+                  {isGeneratingCode ? <Loader2 className="h-5 w-5 animate-spin" /> : <><RefreshCw className="h-5 w-5 mr-2" /> Generate Kode Baru</>}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* ==================== TAB 5: PENGAJAR (TEACHERS) ==================== */}
+        <TabsContent value="teachers" className="space-y-6 focus:outline-none">
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-amber-100 p-6 md:p-8 rounded-[2rem] border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a]">
+            <h3 className="text-2xl md:text-3xl font-black text-slate-900 uppercase">Tim Pengajar</h3>
+            <Dialog open={isTeacherOpen} onOpenChange={setIsTeacherOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-amber-400 hover:bg-amber-300 text-slate-900 h-14 px-6 text-base font-black border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] active:shadow-none active:translate-y-1 hover:-translate-y-1 hover:shadow-[6px_6px_0px_#0f172a] transition-all rounded-[1.5rem] uppercase tracking-wider">
+                  <Plus className="mr-2 h-6 w-6" /> Rekrut Pengajar
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="border-4 border-slate-900 shadow-[12px_12px_0px_#0f172a] rounded-[2rem] bg-[#FDFBF7] p-6 sm:p-8 max-w-md">
+                <DialogHeader><DialogTitle className="font-black text-3xl uppercase text-slate-900">Rekrut Rekan Guru</DialogTitle></DialogHeader>
+                <form onSubmit={handleAddTeacher} className="space-y-6 mt-4">
+                  <div className="space-y-2">
+                    <Label className="font-black uppercase text-xs">Username Guru</Label>
+                    <Input className="h-14 border-4 border-slate-900 font-bold text-lg rounded-xl bg-white focus-visible:ring-0 focus:shadow-[4px_4px_0px_#0f172a]" value={teacherUsername} onChange={e => setTeacherUsername(e.target.value)} required placeholder="Misal: guru_hebat" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-black uppercase text-xs">Peran (Role)</Label>
+                    <Select value={teacherRole} onValueChange={setTeacherRole}>
+                      <SelectTrigger className="h-14 border-4 border-slate-900 font-bold rounded-xl bg-white focus-visible:ring-0 focus:shadow-[4px_4px_0px_#0f172a]">
+                        <SelectValue placeholder="Pilih peran..." />
+                      </SelectTrigger>
+                      <SelectContent className="border-4 border-slate-900 rounded-xl">
+                        <SelectItem value="co_teacher" className="font-bold py-3">Co-Teacher (Bisa Edit Materi & Kuis)</SelectItem>
+                        <SelectItem value="grader" className="font-bold py-3">Grader (Hanya Menilai Tugas)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button type="submit" className="w-full h-16 bg-amber-400 hover:bg-amber-300 text-slate-900 font-black text-xl border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a] active:shadow-none active:translate-y-1 rounded-2xl uppercase tracking-wider transition-all mt-4" disabled={isSubmitting}>Rekrut Sekarang</Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {classTeachers.length === 0 ? (
+            <div className="p-16 text-center bg-white border-4 border-slate-900 border-dashed rounded-[2rem] shadow-sm transform -rotate-1">
+              <div className="w-20 h-20 bg-slate-100 rounded-2xl border-4 border-slate-900 flex items-center justify-center mx-auto mb-4 shadow-[4px_4px_0px_#0f172a] transform rotate-3">
+                <Users className="h-10 w-10 text-slate-400" />
+              </div>
+              <p className="font-black text-xl text-slate-500 uppercase tracking-widest">Tidak ada pengajar tambahan.</p>
+            </div>
+          ) : (
+            <div className="grid gap-6">
+              {classTeachers.map((ct) => (
+                <Card key={ct.id} className="group border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a] rounded-[24px] bg-white hover:-translate-y-2 hover:shadow-[10px_10px_0px_#0f172a] transition-all duration-300 overflow-hidden flex flex-col md:flex-row cursor-default">
+                  <div className="w-full md:w-24 shrink-0 border-b-4 md:border-b-0 md:border-r-4 border-slate-900 bg-amber-200 flex items-center justify-center py-6 md:py-0">
+                    <Users className="h-10 w-10 text-slate-900 transform group-hover:scale-110 transition-transform" />
+                  </div>
+                  <CardContent className="p-6 md:p-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 w-full">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-black text-2xl md:text-3xl text-slate-900 truncate mb-2 group-hover:text-amber-600 transition-colors">{ct.profiles?.full_name || ct.profiles?.username}</h4>
+                      <p className="text-sm font-bold text-slate-500 mt-1 uppercase tracking-wider">@{ct.profiles?.username}</p>
+                      <Badge className="bg-slate-100 text-slate-700 font-bold border-2 border-slate-300 uppercase tracking-wider px-3 py-1 text-xs md:text-sm mt-3 shadow-sm">
+                        {ct.role === 'co_teacher' ? 'Co-Teacher' : 'Grader'}
+                      </Badge>
+                    </div>
+                    <div className="flex gap-3 w-full lg:w-auto shrink-0 justify-end">
+                      <Button variant="ghost" className="h-12 w-12 md:h-14 md:w-14 p-0 text-slate-600 bg-red-100 hover:bg-red-400 hover:text-white border-2 border-slate-900 shadow-[3px_3px_0px_#0f172a] rounded-xl hover:-translate-y-1 transition-all" onClick={() => handleDelete('class_teachers', ct.id)}>
+                        <Trash2 className="h-5 w-5 md:h-6 md:w-6" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
         </TabsContent>

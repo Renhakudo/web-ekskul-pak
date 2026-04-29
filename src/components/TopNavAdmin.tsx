@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Users, BookOpen, FileText, Settings, LogOut, ShieldAlert, Sparkles, Menu, X } from 'lucide-react'
+import { LayoutDashboard, Users, BookOpen, FileText, Settings, LogOut, ShieldAlert, Sparkles, Menu, X, Fingerprint } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
@@ -13,6 +13,7 @@ const adminMenu = [
     { href: '/admin', label: 'Statistik', icon: LayoutDashboard, exact: true, color: 'text-violet-600' },
     { href: '/admin/users', label: 'User & Role', icon: Users, exact: false, color: 'text-blue-600' },
     { href: '/admin/classes', label: 'Kelas', icon: BookOpen, exact: false, color: 'text-emerald-600' },
+    { href: '/admin/absensi', label: 'Absensi', icon: Fingerprint, exact: false, color: 'text-cyan-600' },
     { href: '/admin/blog', label: 'Publikasi', icon: FileText, exact: false, color: 'text-orange-600' },
     { href: '/admin/settings', label: 'Sistem', icon: Settings, exact: false, color: 'text-slate-600' },
 ]

@@ -29,25 +29,24 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [quizzes, setQuizzes] = useState<any[]>([])
   const [classSessions, setClassSessions] = useState<any[]>([])
+  const [classTeachers, setClassTeachers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   const [isMatOpen, setIsMatOpen] = useState(false)
   const [isAssOpen, setIsAssOpen] = useState(false)
   const [isQuizOpen, setIsQuizOpen] = useState(false)
   const [isSessionOpen, setIsSessionOpen] = useState(false)
+  const [isTeacherOpen, setIsTeacherOpen] = useState(false)
+
+  const [teacherUsername, setTeacherUsername] = useState('')
+  const [teacherRole, setTeacherRole] = useState('co_teacher')
 
   const [qzTitle, setQzTitle] = useState('')
   const [qzTimeLimit, setQzTimeLimit] = useState(600)
   const [qzXP, setQzXP] = useState(100)
 
-  const [editingMaterial, setEditingMaterial] = useState<Material | null>(null)
   const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-
-  const [mTitle, setMTitle] = useState('')
-  const [mModuleName, setMModuleName] = useState('')
-  const [mType, setMType] = useState('text')
-  const [mContent, setMContent] = useState('')
 
   const [aTitle, setATitle] = useState('')
   const [aDesc, setADesc] = useState('')
@@ -78,6 +77,9 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
 
     const { data: sData } = await supabase.from('class_sessions').select('*').eq('class_id', id).order('session_date', { ascending: false })
     if (sData) setClassSessions(sData)
+
+    const { data: ctData } = await supabase.from('class_teachers').select('*, profiles:user_id(*)').eq('class_id', id)
+    if (ctData) setClassTeachers(ctData)
 
     setLoading(false)
   }
@@ -218,6 +220,37 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
     setIsSubmitting(false)
   }
 
+  const handleAddTeacher = async (e: React.FormEvent) => {
+    e.preventDefault(); setIsSubmitting(true)
+    const { data: targetUser } = await supabase.from('profiles').select('id, role').eq('username', teacherUsername).single()
+    if (!targetUser) {
+        toast.error('Pengajar dengan username tersebut tidak ditemukan!')
+        setIsSubmitting(false)
+        return
+    }
+    if (targetUser.role !== 'guru' && targetUser.role !== 'admin') {
+        toast.error('Pengguna tersebut bukan seorang guru!')
+        setIsSubmitting(false)
+        return
+    }
+
+    const { data: { user } } = await supabase.auth.getUser()
+    const { error } = await supabase.from('class_teachers').insert({
+        class_id: id,
+        user_id: targetUser.id,
+        role: teacherRole,
+        granted_by: user?.id
+    })
+    
+    if (!error) {
+        toast.success('Pengajar berhasil ditambahkan!')
+        setIsTeacherOpen(false); setTeacherUsername(''); fetchData()
+    } else {
+        toast.error('Gagal menambahkan pengajar: ' + error.message)
+    }
+    setIsSubmitting(false)
+  }
+
   const resetForms = () => {
     setMTitle(''); setMModuleName(''); setMType('text'); setMContent('');
     setATitle(''); setADesc(''); setADueDate('');
@@ -242,11 +275,12 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
       </div>
 
       <Tabs defaultValue="materials" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 gap-2 bg-slate-200/60 p-2 rounded-2xl border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] mb-8 min-h-16">
-          <TabsTrigger value="materials" className="font-black text-sm sm:text-base data-[state=active]:bg-violet-400 data-[state=active]:text-slate-900 data-[state=active]:border-2 data-[state=active]:border-slate-900 data-[state=active]:shadow-[2px_2px_0px_#0f172a] rounded-xl transition-all h-full min-h-12 border-2 border-transparent uppercase whitespace-nowrap">Materi</TabsTrigger>
-          <TabsTrigger value="assignments" className="font-black text-sm sm:text-base data-[state=active]:bg-pink-400 data-[state=active]:text-slate-900 data-[state=active]:border-2 data-[state=active]:border-slate-900 data-[state=active]:shadow-[2px_2px_0px_#0f172a] rounded-xl transition-all h-full min-h-12 border-2 border-transparent uppercase">Tugas</TabsTrigger>
-          <TabsTrigger value="quizzes" className="font-black text-sm sm:text-base data-[state=active]:bg-emerald-400 data-[state=active]:text-slate-900 data-[state=active]:border-2 data-[state=active]:border-slate-900 data-[state=active]:shadow-[2px_2px_0px_#0f172a] rounded-xl transition-all h-full min-h-12 border-2 border-transparent uppercase">Ujian</TabsTrigger>
-          <TabsTrigger value="sessions" className="font-black text-sm sm:text-base data-[state=active]:bg-cyan-400 data-[state=active]:text-slate-900 data-[state=active]:border-2 data-[state=active]:border-slate-900 data-[state=active]:shadow-[2px_2px_0px_#0f172a] rounded-xl transition-all h-full min-h-12 border-2 border-transparent uppercase whitespace-nowrap">Absensi</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 gap-2 bg-slate-200/60 p-2 rounded-2xl border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] mb-8 min-h-16">
+          <TabsTrigger value="materials" className="font-black text-xs sm:text-sm data-[state=active]:bg-violet-400 data-[state=active]:text-slate-900 data-[state=active]:border-2 data-[state=active]:border-slate-900 data-[state=active]:shadow-[2px_2px_0px_#0f172a] rounded-xl transition-all h-full min-h-12 border-2 border-transparent uppercase whitespace-nowrap">Materi</TabsTrigger>
+          <TabsTrigger value="assignments" className="font-black text-xs sm:text-sm data-[state=active]:bg-pink-400 data-[state=active]:text-slate-900 data-[state=active]:border-2 data-[state=active]:border-slate-900 data-[state=active]:shadow-[2px_2px_0px_#0f172a] rounded-xl transition-all h-full min-h-12 border-2 border-transparent uppercase">Tugas</TabsTrigger>
+          <TabsTrigger value="quizzes" className="font-black text-xs sm:text-sm data-[state=active]:bg-emerald-400 data-[state=active]:text-slate-900 data-[state=active]:border-2 data-[state=active]:border-slate-900 data-[state=active]:shadow-[2px_2px_0px_#0f172a] rounded-xl transition-all h-full min-h-12 border-2 border-transparent uppercase">Ujian</TabsTrigger>
+          <TabsTrigger value="sessions" className="font-black text-xs sm:text-sm data-[state=active]:bg-cyan-400 data-[state=active]:text-slate-900 data-[state=active]:border-2 data-[state=active]:border-slate-900 data-[state=active]:shadow-[2px_2px_0px_#0f172a] rounded-xl transition-all h-full min-h-12 border-2 border-transparent uppercase whitespace-nowrap">Absensi</TabsTrigger>
+          <TabsTrigger value="teachers" className="font-black text-xs sm:text-sm data-[state=active]:bg-amber-400 data-[state=active]:text-slate-900 data-[state=active]:border-2 data-[state=active]:border-slate-900 data-[state=active]:shadow-[2px_2px_0px_#0f172a] rounded-xl transition-all h-full min-h-12 border-2 border-transparent uppercase whitespace-nowrap">Pengajar</TabsTrigger>
         </TabsList>
 
         {/* TAB 1: MATERI */}
@@ -254,39 +288,11 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
           <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b-4 border-slate-900 pb-4">
             <h3 className="text-3xl font-black text-slate-900 uppercase">Perbendaharaan Materi</h3>
 
-            <Dialog open={isMatOpen} onOpenChange={setIsMatOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-violet-500 hover:bg-violet-400 text-slate-900 h-12 font-black border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] hover:translate-y-1 hover:shadow-[2px_2px_0px_#0f172a] transition-all rounded-xl">
-                  <Plus className="mr-2 h-5 w-5" /> Materi Ekstra
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="border-4 border-slate-900 shadow-[12px_12px_0px_#0f172a] rounded-[32px]">
-                <DialogHeader><DialogTitle className="font-black text-2xl">Arsip Baru</DialogTitle></DialogHeader>
-                <form onSubmit={handleAddMaterial} className="space-y-5 mt-4">
-                  <div className="space-y-2"><Label className="font-black">Subjek Modul</Label><Input className="h-12 border-4 border-slate-900 font-bold focus:shadow-[2px_2px_0px_#0f172a]" value={mTitle} onChange={e => setMTitle(e.target.value)} required /></div>
-                  <div className="space-y-2"><Label className="font-black">Grup Modul (Opsional)</Label><Input className="h-12 border-4 border-slate-900 font-bold" value={mModuleName} onChange={e => setMModuleName(e.target.value)} placeholder="Misal: Bab 1: Pendahuluan" /></div>
-                  <div className="space-y-2"><Label className="font-black">Tipe Informasi</Label>
-                    <Select value={mType} onValueChange={setMType}>
-                      <SelectTrigger className="h-12 border-4 border-slate-900 font-bold focus:shadow-[2px_2px_0px_#0f172a]"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="text" className="font-bold">Teks Laporan</SelectItem>
-                        <SelectItem value="video" className="font-bold">Sinyal Video</SelectItem>
-                        <SelectItem value="file" className="font-bold">Dokumen Rahasia (File)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="font-black">{mType === 'video' ? 'Tautan YouTube' : mType === 'file' ? 'Tautan File (Gdrive dll)' : 'Isi Data'}</Label>
-                    {mType === 'text' ? (
-                        <RichTextEditor value={mContent} onChange={setMContent} placeholder="Tuliskan pengetahuan rahasia di sini..." />
-                    ) : (
-                        <Input className="h-12 border-4 border-slate-900 font-medium focus:shadow-[2px_2px_0px_#0f172a]" value={mContent} onChange={e => setMContent(e.target.value)} placeholder="https://..." required />
-                    )}
-                  </div>
-                  <Button type="submit" className="w-full h-12 bg-violet-500 hover:bg-violet-400 font-black text-slate-900 border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a]" disabled={isSubmitting}>Suntik Data</Button>
-                </form>
-              </DialogContent>
-            </Dialog>
+            <Link href={`/guru/classes/${id}/materials/create`}>
+              <Button className="bg-violet-500 hover:bg-violet-400 text-slate-900 h-12 font-black border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] hover:translate-y-1 hover:shadow-[2px_2px_0px_#0f172a] transition-all rounded-xl">
+                <Plus className="mr-2 h-5 w-5" /> Materi Ekstra
+              </Button>
+            </Link>
           </div>
 
           <div className="grid gap-4">
@@ -306,7 +312,9 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
                     <p className="text-sm font-bold text-slate-500 mt-1 uppercase tracking-wider">REWARD: {m.xp_reward} XP</p>
                   </div>
                   <div className="flex gap-3 w-full sm:w-auto ml-auto">
-                    <Button variant="ghost" className="h-10 w-10 p-0 text-slate-600 bg-yellow-100 hover:bg-yellow-300 border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] rounded-xl hover:-translate-y-1" onClick={() => openEditMaterial(m)}><Pencil className="h-4 w-4" /></Button>
+                    <Link href={`/guru/classes/${id}/materials/${m.id}/edit`}>
+                      <Button variant="ghost" className="h-10 w-10 p-0 text-slate-600 bg-yellow-100 hover:bg-yellow-300 border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] rounded-xl hover:-translate-y-1"><Pencil className="h-4 w-4" /></Button>
+                    </Link>
                     <Button variant="ghost" className="h-10 w-10 p-0 text-slate-600 bg-red-100 hover:bg-red-400 hover:text-white border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] rounded-xl hover:-translate-y-1" onClick={() => handleDelete('materials', m.id)}><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 </CardContent>
@@ -314,34 +322,7 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
             ))}
           </div>
 
-          <Dialog open={!!editingMaterial} onOpenChange={(open) => !open && setEditingMaterial(null)}>
-            <DialogContent className="border-4 border-slate-900 shadow-[12px_12px_0px_#0f172a] rounded-[32px]">
-              <DialogHeader><DialogTitle className="font-black text-2xl">Romba Arsip</DialogTitle></DialogHeader>
-              <form onSubmit={handleUpdateMaterial} className="space-y-5 mt-4">
-                <div className="space-y-2"><Label className="font-black">Judul Baru</Label><Input className="h-12 border-4 border-slate-900 font-bold" value={mTitle} onChange={e => setMTitle(e.target.value)} required /></div>
-                <div className="space-y-2"><Label className="font-black">Grup Modul</Label><Input className="h-12 border-4 border-slate-900 font-bold" value={mModuleName} onChange={e => setMModuleName(e.target.value)} /></div>
-                <div className="space-y-2"><Label className="font-black">Tipe Informasi</Label>
-                  <Select value={mType} onValueChange={setMType}>
-                    <SelectTrigger className="h-12 border-4 border-slate-900 font-bold"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="text" className="font-bold">Teks</SelectItem>
-                      <SelectItem value="video" className="font-bold">Video</SelectItem>
-                      <SelectItem value="file" className="font-bold">File (Dokumen)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                    <Label className="font-black">{mType === 'video' ? 'Tautan YouTube' : mType === 'file' ? 'Tautan File' : 'Isi Data'}</Label>
-                    {mType === 'text' ? (
-                        <RichTextEditor value={mContent} onChange={setMContent} placeholder="Tuliskan pengetahuan rahasia di sini..." />
-                    ) : (
-                        <Input className="h-12 border-4 border-slate-900 font-medium" value={mContent} onChange={e => setMContent(e.target.value)} placeholder="https://..." required />
-                    )}
-                </div>
-                <Button type="submit" className="w-full h-12 bg-yellow-400 text-slate-900 font-black border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a]" disabled={isSubmitting}><Save className="mr-2 h-5 w-5" /> Revisi Data</Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+
         </TabsContent>
 
         {/* TAB 2: TUGAS */}
@@ -557,6 +538,72 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
                     </div>
                     <div className="flex gap-2 w-full sm:w-auto">
                       <Button variant="ghost" className="w-full h-12 sm:w-12 p-0 text-slate-600 shrink-0 bg-red-100 hover:bg-red-400 hover:text-white border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] rounded-xl hover:-translate-y-1 transition-all" onClick={() => handleDelete('class_sessions', session.id)}>
+                        <Trash2 className="h-5 w-5" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* TAB 5: PENGUASA KELAS (TEACHERS) */}
+        <TabsContent value="teachers" className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b-4 border-slate-900 pb-4">
+            <h3 className="text-3xl font-black text-slate-900 uppercase">Tim Pengajar</h3>
+            <Dialog open={isTeacherOpen} onOpenChange={setIsTeacherOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-amber-400 hover:bg-amber-300 text-slate-900 h-12 font-black border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] hover:translate-y-1 transition-all rounded-xl">
+                  <Plus className="mr-2 h-5 w-5" /> Rekrut Pengajar
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="border-4 border-slate-900 shadow-[12px_12px_0px_#0f172a] rounded-[32px]">
+                <DialogHeader><DialogTitle className="font-black text-2xl">Rekrut Rekan Guru</DialogTitle></DialogHeader>
+                <form onSubmit={handleAddTeacher} className="space-y-5 mt-4">
+                  <div className="space-y-2">
+                    <Label className="font-black">Username Guru</Label>
+                    <Input className="h-12 border-4 border-slate-900 font-bold" value={teacherUsername} onChange={e => setTeacherUsername(e.target.value)} required placeholder="Misal: guru_hebat" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-black">Peran (Role)</Label>
+                    <Select value={teacherRole} onValueChange={setTeacherRole}>
+                      <SelectTrigger className="h-12 border-4 border-slate-900 font-bold">
+                        <SelectValue placeholder="Pilih peran..." />
+                      </SelectTrigger>
+                      <SelectContent className="border-4 border-slate-900">
+                        <SelectItem value="co_teacher" className="font-bold">Co-Teacher (Bisa Edit Materi & Kuis)</SelectItem>
+                        <SelectItem value="grader" className="font-bold">Grader (Hanya Menilai Tugas)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button type="submit" className="w-full h-12 bg-amber-400 text-slate-900 font-black border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a]" disabled={isSubmitting}>Rekrut Sekarang</Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {classTeachers.length === 0 ? (
+            <div className="text-center py-20 border-4 border-dashed border-slate-300 rounded-[32px] bg-white">
+              <Briefcase className="h-16 w-16 text-slate-200 mx-auto" />
+              <h3 className="font-black text-2xl mt-4">Gelar Single Fighter</h3>
+              <p className="font-bold text-slate-400">Anda mengajar kelas ini sendirian. Tambahkan rekan untuk membantu.</p>
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              {classTeachers.map((ct) => (
+                <Card key={ct.id} className="group border-4 border-slate-900 shadow-[6px_6px_0px_#0f172a] rounded-[24px] bg-white hover:-translate-y-1 transition-all flex flex-col md:flex-row overflow-hidden">
+                  <div className="w-full md:w-20 shrink-0 border-b-4 md:border-b-0 md:border-r-4 border-slate-900 bg-amber-200 flex items-center justify-center py-4 md:py-0">
+                    <Briefcase className="h-8 w-8 text-slate-900" />
+                  </div>
+                  <CardContent className="p-4 sm:p-6 w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex-1">
+                      <h4 className="font-black text-xl text-slate-900">{ct.profiles?.full_name || ct.profiles?.username}</h4>
+                      <p className="text-sm font-bold text-slate-500 mt-1 uppercase">@{ct.profiles?.username}</p>
+                      <Badge className="bg-slate-100 text-slate-700 font-black border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] mt-2 uppercase">{ct.role === 'co_teacher' ? 'Co-Teacher' : 'Grader'}</Badge>
+                    </div>
+                    <div className="flex gap-2 w-full sm:w-auto mt-4 sm:mt-0">
+                      <Button variant="ghost" className="w-full h-12 sm:w-12 p-0 text-slate-600 shrink-0 bg-red-100 hover:bg-red-400 hover:text-white border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] rounded-xl hover:-translate-y-1 transition-all" onClick={() => handleDelete('class_teachers', ct.id)}>
                         <Trash2 className="h-5 w-5" />
                       </Button>
                     </div>

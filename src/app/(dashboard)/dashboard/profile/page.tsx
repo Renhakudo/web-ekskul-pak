@@ -27,6 +27,7 @@ import {
   KeyRound
 } from 'lucide-react'
 import { toast } from 'sonner'
+import * as htmlToImage from 'html-to-image'
 
 export default function ProfilePage() {
   const supabase = createClient()
@@ -181,27 +182,51 @@ export default function ProfilePage() {
   const calculateLevel = (xp: number) => Math.floor(xp / 100) + 1
   const calculateProgress = (xp: number) => xp % 100
 
+  const [isGeneratingCard, setIsGeneratingCard] = useState(false)
+
   // Fungsi share kartu profil
   const handleShareProfile = async () => {
     if (!user) return
-    const shareUrl = `${window.location.origin}/share/${user.id}`
-    const shareData = {
-      title: `Kartu Profil ${fullName || 'Siswa'} di EkskulPAK`,
-      text: `Lihat kartu profil belajarku di EkskulPAK! Level ${calculateLevel(profile?.points || 0)}, ${profile?.points || 0} XP.`,
-      url: shareUrl,
-    }
+    setIsGeneratingCard(true)
     try {
-      if (navigator.share && navigator.canShare?.(shareData)) {
-        await navigator.share(shareData)
-      } else {
-        // Fallback: copy link ke clipboard
-        await navigator.clipboard.writeText(shareUrl)
-        setSaveMessage({ text: 'Link profil berhasil disalin ke clipboard!', type: 'success' })
-        setTimeout(() => setSaveMessage(null), 3000)
+      const node = document.getElementById('profile-card-export')
+      if (!node) {
+        toast.error('Gagal menemukan kartu profil.')
+        setIsGeneratingCard(false)
+        return
       }
-    } catch {
-      // User cancelled or not supported
+
+      // Sembunyikan elemen UI kontrol saat render
+      const actionButtons = node.querySelectorAll('.hide-on-export')
+      actionButtons.forEach(btn => (btn as HTMLElement).style.display = 'none')
+
+      const dataUrl = await htmlToImage.toPng(node, { quality: 0.95, pixelRatio: 2, backgroundColor: '#ffffff' })
+      
+      // Tampilkan kembali
+      actionButtons.forEach(btn => (btn as HTMLElement).style.display = '')
+
+      const res = await fetch(dataUrl)
+      const blob = await res.blob()
+      const file = new File([blob], `kartu-profil-${username || 'ekskul'}.png`, { type: 'image/png' })
+
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: `Kartu Profil ${fullName || 'Siswa'}`,
+          text: `Lihat kartu profil belajarku di EkskulPAK! Level ${calculateLevel(profile?.points || 0)}, ${profile?.points || 0} XP.`,
+        })
+      } else {
+        const link = document.createElement('a')
+        link.download = `kartu-profil-${username || 'ekskul'}.png`
+        link.href = dataUrl
+        link.click()
+        toast.success('Kartu profil berhasil diunduh!')
+      }
+    } catch (err) {
+      console.error(err)
+      toast.error('Gagal memproses gambar kartu profil.')
     }
+    setIsGeneratingCard(false)
   }
 
   if (loading) return (
@@ -232,7 +257,7 @@ export default function ProfilePage() {
         <div className="md:col-span-1 space-y-8">
 
           {/* 1. Identity Card */}
-          <Card className="border-4 border-slate-900 shadow-[8px_8px_0px_#0f172a] rounded-[32px] overflow-hidden relative bg-white transform hover:-translate-y-1 transition-transform">
+          <Card id="profile-card-export" className="border-4 border-slate-900 shadow-[8px_8px_0px_#0f172a] rounded-[32px] overflow-hidden relative bg-white transform hover:-translate-y-1 transition-transform">
             <div className="h-28 bg-violet-400 border-b-4 border-slate-900 relative">
               <div className="absolute inset-0 bg-pattern-stripes opacity-20"></div>
             </div>
@@ -247,7 +272,7 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   onClick={handleGenerateAvatar}
-                  className="absolute bottom-0 right-0 bg-orange-400 p-2 rounded-xl border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] hover:bg-orange-300 hover:scale-110 active:translate-y-1 active:shadow-none animate-bounce transition-all cursor-pointer"
+                  className="hide-on-export absolute bottom-0 right-0 bg-orange-400 p-2 rounded-xl border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] hover:bg-orange-300 hover:scale-110 active:translate-y-1 active:shadow-none animate-bounce transition-all cursor-pointer"
                   title="Ganti Avatar Robot Acak"
                 >
                   <Dice5 className="h-5 w-5 text-slate-900" />
@@ -275,10 +300,12 @@ export default function ProfilePage() {
                 <Button
                   onClick={handleShareProfile}
                   variant="outline"
-                  className="w-full mt-2 border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] font-bold hover:bg-violet-100 hover:border-violet-600 transition-all rounded-xl"
-                  title="Salin link gambar profil untuk dibagikan"
+                  disabled={isGeneratingCard}
+                  className="hide-on-export w-full mt-2 border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] font-bold hover:bg-violet-100 hover:border-violet-600 transition-all rounded-xl"
+                  title="Simpan/Bagikan gambar kartu profil"
                 >
-                  <Share2 className="h-4 w-4 mr-2" /> Bagikan Kartu Profil
+                  {isGeneratingCard ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Share2 className="h-4 w-4 mr-2" />} 
+                  {isGeneratingCard ? "Mencetak Kartu..." : "Bagikan Kartu Profil"}
                 </Button>
               </div>
             </CardContent>

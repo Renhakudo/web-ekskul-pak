@@ -251,8 +251,8 @@ export default function QuizAttemptPage({
                             : <XCircle className="h-24 w-24 mx-auto mb-4 drop-shadow-md" />
                         }
                         <h1 className="text-5xl md:text-7xl font-black mb-2 tracking-tighter drop-shadow-sm">{result.score} / 100</h1>
-                        <p className="font-bold text-lg md:text-xl bg-white/40 inline-block px-4 py-1.5 border-2 border-slate-900 rounded-xl mt-2">
-                            {passed ? 'Lulus KKM dengan Gemilang! 🚀' : 'Gagal Mencapai Target KKM — Jangan Nyerah! ☠️'}
+                        <p className="font-bold text-lg md:text-xl bg-white/40 inline-flex items-center gap-2 px-4 py-1.5 border-2 border-slate-900 rounded-xl mt-2">
+                            {passed ? <><Trophy className="h-5 w-5" /> Lulus KKM dengan Gemilang!</> : <><AlertTriangle className="h-5 w-5" /> Gagal Mencapai Target KKM — Jangan Nyerah!</>}
                         </p>
                     </div>
                     <CardContent className="p-8 md:p-10 space-y-8">

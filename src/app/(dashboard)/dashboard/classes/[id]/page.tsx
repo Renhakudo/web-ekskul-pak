@@ -36,7 +36,7 @@ interface Material { id: string; title: string; module_name?: string; type: 'vid
 interface Assignment { id: string; title: string; description: string; due_date: string; }
 interface Reply { id: string; user_id: string; content: string; created_at: string; updated_at?: string; parent_reply_id?: string | null; profiles: { full_name: string; avatar_url: string; role: string } }
 interface Discussion { id: string; user_id: string; title: string; content: string; created_at: string; updated_at?: string; profiles: { full_name: string; avatar_url: string; role: string }; replies: Reply[]; }
-interface ClassDetail { id: string; title: string; description: string; created_by: string; materials: Material[]; assignments: Assignment[]; discussions: Discussion[]; quizzes: any[]; }
+interface ClassDetail { id: string; title: string; description: string; created_by: string; profiles?: { full_name: string; avatar_url: string; username: string }; materials: Material[]; assignments: Assignment[]; discussions: Discussion[]; quizzes: any[]; }
 
 export default function StudentClassDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params)
@@ -47,6 +47,9 @@ export default function StudentClassDetailPage({ params }: { params: Promise<{ i
 
   const [classData, setClassData] = useState<ClassDetail | null>(null)
   const [isInitialLoading, setIsInitialLoading] = useState(true)
+  const [completedMaterialIds, setCompletedMaterialIds] = useState<Set<string>>(new Set())
+  const [classTeachers, setClassTeachers] = useState<any[]>([])
+  const [quizAttempts, setQuizAttempts] = useState<any[]>([])
 
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [currentUserRole, setCurrentUserRole] = useState<string>('siswa')
@@ -102,12 +105,20 @@ export default function StudentClassDetailPage({ params }: { params: Promise<{ i
       if (profile) setCurrentUserRole(profile.role)
     }
 
-    const [classRes, materialsRes, assignmentsRes, quizzesRes] = await Promise.all([
-      supabase.from('classes').select('*').eq('id', id).single(),
+    const [classRes, materialsRes, assignmentsRes, quizzesRes, progressRes, ctRes, qaRes] = await Promise.all([
+      supabase.from('classes').select('*, profiles:created_by(full_name, avatar_url, username)').eq('id', id).single(),
       supabase.from('materials').select('*').eq('class_id', id).order('created_at'),
       supabase.from('assignments').select('*').eq('class_id', id).order('created_at', { ascending: false }),
-      supabase.from('quizzes').select('*, quiz_questions(count)').eq('class_id', id).order('created_at')
+      supabase.from('quizzes').select('*, quiz_questions(count)').eq('class_id', id).order('created_at'),
+      user ? supabase.from('material_progress').select('material_id').eq('class_id', id).eq('user_id', user.id).eq('completed', true) : Promise.resolve({ data: [] }),
+      supabase.from('class_teachers').select('*, profiles:user_id(full_name, avatar_url, username)').eq('class_id', id),
+      user ? supabase.from('quiz_attempts').select('quiz_id, score, is_completed').eq('user_id', user.id) : Promise.resolve({ data: [] })
     ])
+    
+    let legacyProgressRes: any = { data: [] }
+    if (user) {
+      legacyProgressRes = await supabase.from('points_logs').select('source').eq('user_id', user.id).ilike('source', 'material_%')
+    }
 
     const { data: discussionsResult } = await supabase
       .from('discussions')
@@ -130,6 +141,13 @@ export default function StudentClassDetailPage({ params }: { params: Promise<{ i
         quizzes: quizzesRes.data || [],
         discussions: sortedDiscussions,
       })
+      setClassTeachers(ctRes.data || [])
+      setQuizAttempts(qaRes.data || [])
+      
+      const compIds = new Set<string>()
+      if (progressRes.data) progressRes.data.forEach((p: any) => compIds.add(p.material_id))
+      if (legacyProgressRes.data) legacyProgressRes.data.forEach((p: any) => compIds.add(p.source.replace('material_', '')))
+      setCompletedMaterialIds(compIds)
     }
     setIsInitialLoading(false)
   }, [id])
@@ -327,6 +345,27 @@ export default function StudentClassDetailPage({ params }: { params: Promise<{ i
             {classData.description || "Misi rahasia. Detail tidak ditemukan di arsip."}
           </p>
 
+          <div className="flex flex-wrap items-center gap-3 mt-4">
+             <span className="text-xs md:text-sm font-black text-slate-900 uppercase">Diampu Oleh:</span>
+             <Badge className="bg-white text-slate-900 border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] font-bold uppercase">{classData.profiles?.full_name || classData.profiles?.username || 'Creator'}</Badge>
+             {classTeachers.map(ct => (
+                 <Badge key={ct.id} className="bg-amber-300 text-slate-900 border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] font-bold uppercase">{ct.profiles?.full_name || ct.profiles?.username || 'Pengajar'}</Badge>
+             ))}
+          </div>
+
+          <div className="mt-6 md:mt-8 max-w-3xl">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-xs md:text-sm font-black text-slate-900 uppercase">Progress Eksekusi Misi</span>
+              <span className="text-xs md:text-sm font-black text-slate-900 bg-white px-2 py-0.5 rounded shadow-[2px_2px_0px_#0f172a] border-2 border-slate-900">
+                {classData.materials.length > 0 ? Math.round((classData.materials.filter(m => completedMaterialIds.has(m.id)).length / classData.materials.length) * 100) : 0}%
+              </span>
+            </div>
+            <div className="h-4 md:h-5 w-full bg-white rounded-full overflow-hidden border-2 md:border-4 border-slate-900 shadow-inner relative">
+               <div className="absolute top-0 bottom-0 left-0 bg-emerald-400 border-r-2 md:border-r-4 border-slate-900 transition-all duration-1000 ease-out" 
+                    style={{ width: `${classData.materials.length > 0 ? Math.round((classData.materials.filter(m => completedMaterialIds.has(m.id)).length / classData.materials.length) * 100) : 0}%` }}></div>
+            </div>
+          </div>
+
           <div className="flex flex-wrap gap-2 md:gap-4 mt-6 md:mt-8">
             <Badge className="flex items-center gap-1.5 md:gap-2 bg-yellow-300 border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] px-2.5 py-1 md:px-4 md:py-2 rounded-lg md:rounded-xl text-[10px] md:text-sm"><FileText className="h-3 w-3 md:h-5 md:w-5 text-slate-900" /><span className="font-black text-slate-900 uppercase">{classData.materials.length} Materi</span></Badge>
             <Badge className="flex items-center gap-1.5 md:gap-2 bg-pink-300 border-2 border-slate-900 shadow-[2px_2px_0px_#0f172a] px-2.5 py-1 md:px-4 md:py-2 rounded-lg md:rounded-xl text-[10px] md:text-sm"><Briefcase className="h-3 w-3 md:h-5 md:w-5 text-slate-900" /><span className="font-black text-slate-900 uppercase">{classData.assignments.length} Tugas</span></Badge>
@@ -348,7 +387,6 @@ export default function StudentClassDetailPage({ params }: { params: Promise<{ i
                 { id: 'assignments', icon: Briefcase, label: 'Tugas Kelas', color: 'data-[state=active]:bg-pink-300' },
                 { id: 'discussions', icon: MessageSquare, label: 'Forum Diskusi', color: 'data-[state=active]:bg-emerald-300' },
                 { id: 'quizzes', icon: Trophy, label: 'Uji Mental', color: 'data-[state=active]:bg-blue-300' },
-                { id: 'attendance', icon: Fingerprint, label: 'Gelar Pasukan', color: 'data-[state=active]:bg-cyan-300' },
               ].map(tab => (
                 <TabsTrigger 
                   key={tab.id}
@@ -392,8 +430,8 @@ export default function StudentClassDetailPage({ params }: { params: Promise<{ i
                     <div className="grid gap-4 md:gap-6">
                       {mats.map((m: any, index: number) => (
                         <div key={m.id} className="group flex flex-col sm:flex-row items-start sm:items-center gap-4 md:gap-6 p-4 md:p-6 bg-white border-2 md:border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] md:shadow-[6px_6px_0px_#0f172a] rounded-[1.2rem] md:rounded-[24px] hover:-translate-y-1 md:hover:-translate-y-2 hover:shadow-[6px_6px_0px_#0f172a] md:hover:shadow-[10px_10px_0px_#0f172a] transition-all cursor-pointer" onClick={() => router.push(`/dashboard/classes/${id}/materials/${m.id}`)}>
-                          <div className={`h-14 w-14 md:h-16 md:w-16 shrink-0 rounded-xl md:rounded-2xl flex items-center justify-center border-2 md:border-4 border-slate-900 shadow-[2px_2px_0px_#0f172a] md:shadow-[4px_4px_0px_#0f172a] transform group-hover:rotate-6 transition-transform ${m.type === 'video' ? 'bg-orange-300 text-slate-900' : m.type === 'file' ? 'bg-emerald-300 text-slate-900' : 'bg-blue-300 text-slate-900'}`}>
-                            {m.type === 'video' ? <PlayCircle className="h-6 w-6 md:h-8 md:w-8" /> : <FileText className="h-6 w-6 md:h-8 md:w-8" />}
+                          <div className={`h-14 w-14 md:h-16 md:w-16 shrink-0 rounded-xl md:rounded-2xl flex items-center justify-center border-2 md:border-4 border-slate-900 shadow-[2px_2px_0px_#0f172a] md:shadow-[4px_4px_0px_#0f172a] transform group-hover:rotate-6 transition-transform ${completedMaterialIds.has(m.id) ? 'bg-emerald-400 text-slate-900' : m.type === 'video' ? 'bg-orange-300 text-slate-900' : m.type === 'file' ? 'bg-pink-300 text-slate-900' : 'bg-blue-300 text-slate-900'}`}>
+                            {completedMaterialIds.has(m.id) ? <Check className="h-6 w-6 md:h-8 md:w-8" /> : m.type === 'video' ? <PlayCircle className="h-6 w-6 md:h-8 md:w-8" /> : <FileText className="h-6 w-6 md:h-8 md:w-8" />}
                           </div>
                           <div className="flex-1 min-w-0 w-full">
                             <span className="text-[10px] md:text-sm font-black text-violet-600 tracking-widest uppercase">Materi {index + 1}</span>
@@ -458,10 +496,11 @@ export default function StudentClassDetailPage({ params }: { params: Promise<{ i
               <div className="grid gap-4 md:gap-6">
                 {classData.quizzes?.map((qz) => {
                   const qCount = qz.quiz_questions?.[0]?.count ?? qz.quiz_questions?.count ?? 0
+                  const attempt = quizAttempts.find(qa => qa.quiz_id === qz.id)
                   return (
                     <div key={qz.id} className="group flex flex-col sm:flex-row items-start sm:items-center gap-4 md:gap-6 p-4 md:p-6 bg-white border-2 md:border-4 border-slate-900 shadow-[4px_4px_0px_#0f172a] md:shadow-[6px_6px_0px_#0f172a] rounded-[1.2rem] md:rounded-[24px] hover:-translate-y-1 md:hover:-translate-y-2 hover:shadow-[6px_6px_0px_#0f172a] md:hover:shadow-[10px_10px_0px_#0f172a] transition-all cursor-pointer" onClick={() => router.push(`/dashboard/classes/${id}/quiz/${qz.id}`)}>
-                      <div className="h-14 w-14 md:h-16 md:w-16 shrink-0 rounded-xl md:rounded-2xl bg-blue-300 border-2 md:border-4 border-slate-900 shadow-[2px_2px_0px_#0f172a] md:shadow-[4px_4px_0px_#0f172a] flex items-center justify-center transform group-hover:-rotate-6 transition-transform">
-                        <HelpCircle className="h-6 w-6 md:h-8 w-8 text-slate-900" />
+                      <div className={`h-14 w-14 md:h-16 md:w-16 shrink-0 rounded-xl md:rounded-2xl border-2 md:border-4 border-slate-900 shadow-[2px_2px_0px_#0f172a] md:shadow-[4px_4px_0px_#0f172a] flex items-center justify-center transform group-hover:-rotate-6 transition-transform ${attempt?.is_completed ? 'bg-emerald-400 text-slate-900' : 'bg-blue-300 text-slate-900'}`}>
+                        {attempt?.is_completed ? <Check className="h-6 w-6 md:h-8 w-8" /> : <HelpCircle className="h-6 w-6 md:h-8 w-8" />}
                       </div>
                       <div className="flex-1 min-w-0 w-full">
                         <h3 className="text-xl md:text-2xl font-black text-slate-900 truncate my-1 group-hover:text-blue-700 transition-colors uppercase">{qz.title}</h3>
@@ -475,10 +514,15 @@ export default function StudentClassDetailPage({ params }: { params: Promise<{ i
                           <Badge className="text-[10px] md:text-xs font-bold text-blue-900 bg-white border-2 border-blue-300 uppercase shadow-sm border-dashed px-2 py-0.5">
                              {qCount} Rintangan
                           </Badge>
+                          {attempt?.is_completed && (
+                            <Badge className="text-[10px] md:text-xs font-black text-slate-900 bg-emerald-300 border-2 border-slate-900 uppercase shadow-[2px_2px_0px_#0f172a] px-2 py-0.5">
+                              Skor: {attempt.score}
+                            </Badge>
+                          )}
                         </div>
                       </div>
-                      <Button className="w-full sm:w-auto mt-3 sm:mt-0 h-12 bg-blue-400 hover:bg-blue-300 text-slate-900 font-black uppercase tracking-wider border-2 md:border-4 border-slate-900 shadow-[2px_2px_0px_#0f172a] md:shadow-[4px_4px_0px_#0f172a] group-hover:translate-x-1 group-hover:shadow-[4px_4px_0px_#0f172a] md:group-hover:shadow-[6px_6px_0px_#0f172a] transition-all rounded-xl shrink-0 text-xs md:text-sm">
-                        Mulai Ujian <ArrowRight className="ml-2 w-4 h-4 md:w-5 md:h-5" />
+                      <Button className={`w-full sm:w-auto mt-3 sm:mt-0 h-12 font-black uppercase tracking-wider border-2 md:border-4 border-slate-900 shadow-[2px_2px_0px_#0f172a] md:shadow-[4px_4px_0px_#0f172a] group-hover:translate-x-1 transition-all rounded-xl shrink-0 text-xs md:text-sm ${attempt?.is_completed ? 'bg-slate-900 text-emerald-400 group-hover:shadow-[4px_4px_0px_#34d399]' : 'bg-blue-400 hover:bg-blue-300 text-slate-900 group-hover:shadow-[4px_4px_0px_#0f172a] md:group-hover:shadow-[6px_6px_0px_#0f172a]'}`}>
+                        {attempt?.is_completed ? "Lihat Hasil" : "Mulai Ujian"} <ArrowRight className="ml-2 w-4 h-4 md:w-5 md:h-5" />
                       </Button>
                     </div>
                   )

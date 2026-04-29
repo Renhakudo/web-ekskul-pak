@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Users, BookOpen, FileText, Settings, LogOut, ShieldAlert, Sparkles, Menu, X, GraduationCap } from 'lucide-react'
+import { LayoutDashboard, Users, BookOpen, FileText, Settings, LogOut, ShieldAlert, Sparkles, Menu, X, GraduationCap, Fingerprint } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
@@ -12,6 +12,7 @@ import { useState } from 'react'
 const guruMenu = [
     { href: '/guru', label: 'Monitor Kelas', icon: LayoutDashboard, exact: true, color: 'text-violet-600' },
     { href: '/guru/classes', label: 'Kelola Kelas', icon: BookOpen, exact: false, color: 'text-emerald-600' },
+    { href: '/guru/absensi', label: 'Absensi', icon: Fingerprint, exact: false, color: 'text-cyan-600' },
 ]
 
 export function TopNavGuru() {
