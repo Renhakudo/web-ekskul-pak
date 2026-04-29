@@ -41,7 +41,7 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
   const [classTeachers, setClassTeachers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
-  const [isMatOpen, setIsMatOpen] = useState(false)
+
   const [isAssOpen, setIsAssOpen] = useState(false)
   const [isQuizOpen, setIsQuizOpen] = useState(false)
   const [isTeacherOpen, setIsTeacherOpen] = useState(false)

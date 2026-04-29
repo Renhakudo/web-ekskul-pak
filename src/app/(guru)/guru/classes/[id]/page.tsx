@@ -32,7 +32,7 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
   const [classTeachers, setClassTeachers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
-  const [isMatOpen, setIsMatOpen] = useState(false)
+
   const [isAssOpen, setIsAssOpen] = useState(false)
   const [isQuizOpen, setIsQuizOpen] = useState(false)
   const [isSessionOpen, setIsSessionOpen] = useState(false)
@@ -86,22 +86,7 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
 
   useEffect(() => { fetchData() }, [id])
 
-  const handleAddMaterial = async (e: React.FormEvent) => {
-    e.preventDefault(); setIsSubmitting(true)
-    const payload: any = { class_id: id, title: mTitle, module_name: mModuleName || null, type: mType, xp_reward: 50 }
-    if (mType === 'video') payload.youtube_url = mContent; 
-    else if (mType === 'file') payload.file_url = mContent;
-    else payload.content = mContent;
 
-    const { error } = await supabase.from('materials').insert(payload)
-    if (!error) { 
-        toast.success('Materi berhasil ditambahkan!')
-        setIsMatOpen(false); resetForms(); fetchData() 
-    } else {
-        toast.error('Gagal tambah materi: ' + error.message)
-    }
-    setIsSubmitting(false)
-  }
 
   const handleAddAssignment = async (e: React.FormEvent) => {
     e.preventDefault(); setIsSubmitting(true)
@@ -117,30 +102,7 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
     setIsSubmitting(false)
   }
 
-  const openEditMaterial = (m: Material) => {
-    setEditingMaterial(m)
-    setMTitle(m.title)
-    setMModuleName(m.module_name || '')
-    setMType(m.type)
-    setMContent(m.type === 'video' ? m.youtube_url || '' : m.type === 'file' ? m.file_url || '' : m.content || '')
-  }
 
-  const handleUpdateMaterial = async (e: React.FormEvent) => {
-    e.preventDefault(); setIsSubmitting(true)
-    const payload: any = { title: mTitle, module_name: mModuleName || null, type: mType }
-    if (mType === 'video') { payload.youtube_url = mContent; payload.content = null; payload.file_url = null }
-    else if (mType === 'file') { payload.file_url = mContent; payload.content = null; payload.youtube_url = null }
-    else { payload.content = mContent; payload.youtube_url = null; payload.file_url = null }
-
-    const { error } = await supabase.from('materials').update(payload).eq('id', editingMaterial?.id)
-    if (!error) { 
-        toast.success('Materi berhasil diperbarui!')
-        setEditingMaterial(null); resetForms(); fetchData() 
-    } else {
-        toast.error('Gagal perbarui materi: ' + error.message)
-    }
-    setIsSubmitting(false)
-  }
 
   const openEditAssignment = (a: Assignment) => {
     setEditingAssignment(a)
@@ -252,7 +214,6 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
   }
 
   const resetForms = () => {
-    setMTitle(''); setMModuleName(''); setMType('text'); setMContent('');
     setATitle(''); setADesc(''); setADueDate('');
   }
 
