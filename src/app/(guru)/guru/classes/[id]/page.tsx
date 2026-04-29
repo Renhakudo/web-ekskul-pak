@@ -163,7 +163,7 @@ export default function ClassAdminPage({ params }: { params: Promise<{ id: strin
     setIsSubmitting(false)
   }
 
-  const handleDelete = (table: 'materials' | 'assignments' | 'quizzes' | 'class_sessions', itemId: string) => {
+  const handleDelete = (table: 'materials' | 'assignments' | 'quizzes' | 'class_sessions' | 'class_teachers', itemId: string) => {
     setDeleteTarget({ table, id: itemId })
   }
 
